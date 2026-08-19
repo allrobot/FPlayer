@@ -14,7 +14,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,10 +69,16 @@ import io.github.fplayer.feature.device.DeviceConfigurationRoute
 import io.github.fplayer.core.index.saf.SafPermissionStore
 import io.github.fplayer.core.index.db.FPlayerIndexDatabase
 import io.github.fplayer.core.model.AxisId
+import io.github.fplayer.core.model.MediaLocator
 import io.github.fplayer.feature.feed.PlaybackOverlayAction
 import io.github.fplayer.feature.feed.PlaybackOverlayMode
 import io.github.fplayer.feature.feed.PlaybackOverlayReducer
 import io.github.fplayer.feature.feed.PlaybackOverlayState
+import io.github.fplayer.feature.feed.FeedPagingEvent
+import io.github.fplayer.feature.feed.PlaybackFeedReducer
+import io.github.fplayer.feature.feed.PlaybackFeedState
+import io.github.fplayer.feature.feed.PlaybackFeedItem
+import io.github.fplayer.feature.feed.FeedMedia
 import io.github.fplayer.feature.feed.LongPressPlaybackSettingsStateMachine
 import io.github.fplayer.feature.library.HomeSurface
 import io.github.fplayer.feature.library.LibraryContentFilter
@@ -274,6 +280,17 @@ private fun FPlayerApp(
                 )
                 HomeSurface.DEFAULT_FEED, HomeSurface.FOLDER_PLAYBACK -> PlaybackFeedScreen(
                     modifier = Modifier.padding(contentPadding),
+                    feedItems = catalogSnapshot.media.map { media ->
+                        PlaybackFeedItem(
+                            media = FeedMedia(media.mediaId, MediaLocator(media.path)),
+                            title = media.title,
+                            folder = media.folderName,
+                            summary = listOfNotNull(
+                                media.durationMs?.let { "${it / 1_000}s" },
+                                media.width?.let { width -> media.height?.let { height -> "${width}x$height" } },
+                            ).joinToString(" / "),
+                        )
+                    },
                     scriptPlaybackSettings = scriptPlaybackSettings,
                     onOpenSettings = { destinationName = AppDestination.SETTINGS.name },
                     onOpenGrid = ::openCurrentGrid,
@@ -337,6 +354,7 @@ private fun FPlayerApp(
 @Composable
 private fun PlaybackFeedScreen(
     modifier: Modifier = Modifier,
+    feedItems: List<PlaybackFeedItem>,
     scriptPlaybackSettings: ScriptPlaybackSettingsState,
     onOpenSettings: () -> Unit,
     onOpenGrid: () -> Unit,
@@ -344,6 +362,11 @@ private fun PlaybackFeedScreen(
     onOpenSearch: () -> Unit,
 ) {
     var overlay by rememberSaveable(stateSaver = PlaybackOverlaySaver) { mutableStateOf(PlaybackOverlayState()) }
+    var feedState by remember { mutableStateOf(PlaybackFeedState()) }
+    val feedReducer = remember { PlaybackFeedReducer(pageExtentPx = 1_000f) }
+    LaunchedEffect(feedItems) {
+        feedState = feedReducer.reduce(feedState, FeedPagingEvent.ReplaceItems(feedItems))
+    }
     val context = LocalContext.current
     val playbackSettingsState = remember { LongPressPlaybackSettingsStateMachine() }
     playbackSettingsState.updateScriptSettings(scriptPlaybackSettings.snapshot())
@@ -357,30 +380,59 @@ private fun PlaybackFeedScreen(
     }
     Box(
         modifier = modifier.fillMaxSize().background(Color.Black).pointerInput(onOpenGrid) {
-            var horizontalDragPx = 0f
-            detectHorizontalDragGestures(
-                onDragStart = { horizontalDragPx = 0f },
-                onHorizontalDrag = { change, dragAmount ->
+            var dx = 0f
+            var dy = 0f
+            detectDragGestures(
+                onDragStart = {
+                    dx = 0f
+                    dy = 0f
+                    feedState = feedReducer.reduce(feedState, FeedPagingEvent.Down)
+                },
+                onDrag = { change, dragAmount ->
                     change.consume()
-                    horizontalDragPx += dragAmount
+                    dx += dragAmount.x
+                    dy += dragAmount.y
+                    feedState = feedReducer.reduce(feedState, FeedPagingEvent.Move(dx, dy))
                 },
                 onDragEnd = {
-                    if (horizontalDragPx <= -size.width * 0.20f) onOpenGrid()
+                    feedState = feedReducer.reduce(feedState, FeedPagingEvent.Up())
+                    if (feedState.paging.outcome == io.github.fplayer.feature.feed.FeedPagingOutcome.OPEN_GRID) {
+                        onOpenGrid()
+                    } else if (feedState.paging.phase == io.github.fplayer.feature.feed.FeedGesturePhase.SETTLING) {
+                        feedState = feedReducer.reduce(feedState, FeedPagingEvent.Settle(1f))
+                    }
                 },
-                onDragCancel = { horizontalDragPx = 0f },
+                onDragCancel = {
+                    feedState = feedReducer.reduce(feedState, FeedPagingEvent.Up())
+                },
             )
         },
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text("FPlayer", color = Color.White, style = MaterialTheme.typography.headlineSmall)
-            Text("暂无媒体", color = Color.LightGray, style = MaterialTheme.typography.bodyMedium)
-            Button(onClick = { folderPicker.launch(null) }) {
-                Icon(Icons.Outlined.FolderOpen, contentDescription = "添加文件夹")
-                Text("添加文件夹", modifier = Modifier.padding(start = 8.dp))
+        if (feedItems.isEmpty()) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("FPlayer", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                Text("暂无媒体", color = Color.LightGray, style = MaterialTheme.typography.bodyMedium)
+                Button(onClick = { folderPicker.launch(null) }) {
+                    Icon(Icons.Outlined.FolderOpen, contentDescription = "添加文件夹")
+                    Text("添加文件夹", modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+        } else {
+            val item = feedState.activeIndex?.let(feedItems::getOrNull)
+            Column(
+                modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(item?.title.orEmpty(), color = Color.White, style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "媒体预览",
+                    color = Color.LightGray,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
         }
         if (overlay.mode == PlaybackOverlayMode.NORMAL) {
