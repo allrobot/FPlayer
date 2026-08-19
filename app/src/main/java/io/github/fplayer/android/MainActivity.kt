@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import io.github.fplayer.feature.device.DeviceConfigurationRoute
 import io.github.fplayer.core.index.saf.SafPermissionStore
 import io.github.fplayer.core.index.db.FPlayerIndexDatabase
+import io.github.fplayer.core.model.AxisId
 import io.github.fplayer.feature.feed.PlaybackOverlayAction
 import io.github.fplayer.feature.feed.PlaybackOverlayMode
 import io.github.fplayer.feature.feed.PlaybackOverlayReducer
@@ -83,6 +84,9 @@ import io.github.fplayer.feature.library.LibraryCatalogInput
 import io.github.fplayer.feature.library.LibraryCatalogScreen
 import io.github.fplayer.feature.library.LibraryCatalogStateMachine
 import io.github.fplayer.feature.library.LibraryIndexRepository
+import io.github.fplayer.feature.settings.ScriptPlaybackSettingsState
+import io.github.fplayer.feature.settings.ScriptPlaybackSettingsSurface
+import io.github.fplayer.feature.settings.reduce
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -115,7 +119,9 @@ open class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MaterialTheme(colorScheme = FPlayerColors) {
-                FPlayerApp(onSelectMedia = { mediaId -> playbackBinder?.selectMedia(mediaId) })
+                FPlayerApp(
+                    onSelectMedia = { mediaId -> playbackBinder?.selectMedia(mediaId) },
+                )
             }
         }
     }
@@ -160,7 +166,9 @@ private enum class AppDestination(val label: String) {
 }
 
 @Composable
-private fun FPlayerApp(onSelectMedia: (io.github.fplayer.core.model.MediaId) -> Unit) {
+private fun FPlayerApp(
+    onSelectMedia: (io.github.fplayer.core.model.MediaId) -> Unit,
+) {
     var destinationName by rememberSaveable { mutableStateOf(AppDestination.HOME.name) }
     val destination = AppDestination.valueOf(destinationName)
     val context = LocalContext.current
@@ -194,6 +202,7 @@ private fun FPlayerApp(onSelectMedia: (io.github.fplayer.core.model.MediaId) -> 
     }
     var librarySnapshot by remember { mutableStateOf(libraryState.snapshot()) }
     var libraryJumpTarget by remember { mutableStateOf<LibraryJumpTarget?>(null) }
+    var scriptPlaybackSettings by remember { mutableStateOf(ScriptPlaybackSettingsState()) }
     fun refreshLibrary() { librarySnapshot = libraryState.snapshot() }
     fun openCurrentGrid() {
         libraryJumpTarget = libraryState.openGridFromFeed(librarySnapshot.currentMediaId)
@@ -304,7 +313,14 @@ private fun FPlayerApp(onSelectMedia: (io.github.fplayer.core.model.MediaId) -> 
                 modifier = Modifier.padding(contentPadding),
             )
             AppDestination.DEVICE -> DeviceConfigurationRoute(Modifier.padding(contentPadding))
-            AppDestination.SETTINGS -> DestinationTitle("设置", Modifier.padding(contentPadding))
+            AppDestination.SETTINGS -> ScriptPlaybackSettingsSurface(
+                state = scriptPlaybackSettings,
+                onAction = { action ->
+                    scriptPlaybackSettings = reduce(scriptPlaybackSettings, action)
+                },
+                modifier = Modifier.padding(contentPadding).fillMaxSize(),
+                availableAxes = listOf(AxisId("L0")),
+            )
         }
     }
 }
