@@ -6,11 +6,13 @@ data class LatencyCompensationConfig(
     val maximumAutomaticAdvanceMs: Long = 250L,
     val sampleWindowSize: Int = 9,
     val expiryMs: Long = 10_000L,
+    val maximumRoundTripMs: Long = 10_000L,
 ) {
     init {
         require(maximumAutomaticAdvanceMs > 0) { "maximumAutomaticAdvanceMs must be positive" }
         require(sampleWindowSize > 0) { "sampleWindowSize must be positive" }
         require(expiryMs > 0) { "expiryMs must be positive" }
+        require(maximumRoundTripMs > 0) { "maximumRoundTripMs must be positive" }
     }
 }
 
@@ -45,6 +47,7 @@ class LatencyEstimator(private val config: LatencyCompensationConfig = LatencyCo
         } catch (_: ArithmeticException) {
             throw IllegalArgumentException("roundTripMs exceeds configured maximum")
         }
+        require(roundTripMs <= config.maximumRoundTripMs) { "roundTripMs exceeds configured maximum" }
         samples.addLast(sample)
         while (samples.size > config.sampleWindowSize) samples.removeFirst()
         return estimate(sample.receivedAtMonotonicMs)

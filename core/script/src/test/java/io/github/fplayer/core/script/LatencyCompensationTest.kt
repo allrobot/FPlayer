@@ -69,6 +69,31 @@ class LatencyCompensationTest {
     }
 
     @Test
+    fun `round trip samples are bounded independently from automatic advance`() {
+        val estimator = LatencyEstimator(
+            LatencyCompensationConfig(
+                maximumAutomaticAdvanceMs = 1L,
+                maximumRoundTripMs = 10_000L,
+            ),
+        )
+
+        assertEquals(
+            LatencyMeasurementState.MEASURED,
+            estimator.recordSample(LatencySample(0L, 10_000L)).state,
+        )
+        val aboveMaximum = assertThrows(IllegalArgumentException::class.java) {
+            estimator.recordSample(LatencySample(0L, 10_001L))
+        }
+        val maximumLong = assertThrows(IllegalArgumentException::class.java) {
+            estimator.recordSample(LatencySample(0L, Long.MAX_VALUE))
+        }
+        assertEquals("roundTripMs exceeds configured maximum", aboveMaximum.message)
+        assertEquals("roundTripMs exceeds configured maximum", maximumLong.message)
+        assertEquals(1, estimator.estimate(10_000L).sampleCount)
+        assertEquals(-1L, estimator.estimate(10_000L).automaticOffsetMs)
+    }
+
+    @Test
     fun `unmeasured estimate is nullable and reset clears samples`() {
         val estimator = LatencyEstimator()
         val initial = estimator.estimate(0L)
@@ -87,9 +112,11 @@ class LatencyCompensationTest {
         assertEquals(250L, config.maximumAutomaticAdvanceMs)
         assertEquals(9, config.sampleWindowSize)
         assertEquals(10_000L, config.expiryMs)
+        assertEquals(10_000L, config.maximumRoundTripMs)
         assertThrows(IllegalArgumentException::class.java) { LatencyCompensationConfig(maximumAutomaticAdvanceMs = 0L) }
         assertThrows(IllegalArgumentException::class.java) { LatencyCompensationConfig(sampleWindowSize = 0) }
         assertThrows(IllegalArgumentException::class.java) { LatencyCompensationConfig(expiryMs = 0L) }
+        assertThrows(IllegalArgumentException::class.java) { LatencyCompensationConfig(maximumRoundTripMs = 0L) }
     }
 
     @Test
