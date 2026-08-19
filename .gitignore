@@ -16,6 +16,11 @@ native-build/*
 !native-build/build-arm64.sh
 !native-build/verify-reproducible.sh
 !native-build/assemble-notices.py
+!native-build/verify-release-inputs.py
+!native-build/scan-release-hygiene.py
+!native-build/tests/
+!native-build/tests/*.py
+native-build/tests/__pycache__/
 native-build/out-*/
 native-build/work-*/
 native-build/cache/
