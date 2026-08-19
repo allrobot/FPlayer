@@ -31,6 +31,9 @@ class DevicePlaybackCoordinator(
     private var loadedConfig = ScriptSchedulerConfig()
     private var latencyConfig = LatencyCompensationConfig()
     private var estimate = LatencyEstimate(LatencyMeasurementState.UNMEASURED, 0L, null, 0, null)
+    private val stateLock = Any()
+    private var teardownController: DeviceController? = null
+    private var closing = false
     @Volatile private var closed = false
 
     fun load(bundle: ScriptBundle, config: ScriptSchedulerConfig = ScriptSchedulerConfig()) = submit {
@@ -108,52 +111,76 @@ class DevicePlaybackCoordinator(
         controller: DeviceController,
         operation: (DeviceController) -> Unit,
     ): Boolean {
-        if (closed) return false
         var accepted = false
-        serial.submit {
-            if (this.controller === controller) {
-                operation(controller)
-                accepted = true
+        val task = synchronized(stateLock) {
+            if (closed) return teardownController === controller
+            serial.submit {
+                if (this.controller === controller) {
+                    operation(controller)
+                    accepted = true
+                } else if (teardownController === controller) {
+                    // A close task already owns this controller; do not let the
+                    // session fall back to another executor after teardown.
+                    accepted = true
+                }
             }
-        }.get()
+        }
+        task.get()
         return accepted
     }
 
     override fun releaseController(controller: DeviceController, reason: StopReason): Boolean {
-        if (closed) return false
         var released = false
-        serial.submit {
-            if (this.controller !== controller) return@submit
-            scheduler?.clear(reason)
-            scheduler?.close()
-            runCatching {
-                when (reason) {
-                    StopReason.CONNECTION_LOST -> (controller as? DeviceSafetyController)?.onConnectionLost()
-                    else -> controller.stop(reason)
+        val task = synchronized(stateLock) {
+            if (closed) return teardownController === controller
+            serial.submit {
+                if (this.controller !== controller) {
+                    if (teardownController === controller) released = true
+                    return@submit
                 }
-                controller.disconnect()
-                (controller as? AutoCloseable)?.close()
+                scheduler?.clear(reason)
+                scheduler?.close()
+                runCatching {
+                    when (reason) {
+                        StopReason.CONNECTION_LOST -> (controller as? DeviceSafetyController)?.onConnectionLost()
+                        else -> controller.stop(reason)
+                    }
+                    controller.disconnect()
+                    (controller as? AutoCloseable)?.close()
+                }
+                scheduler = null
+                this.controller = null
+                teardownController = null
+                estimate = LatencyEstimate(LatencyMeasurementState.UNMEASURED, 0L, null, 0, null)
+                released = true
             }
-            scheduler = null
-            this.controller = null
-            estimate = LatencyEstimate(LatencyMeasurementState.UNMEASURED, 0L, null, 0, null)
-            released = true
-        }.get()
+        }
+        task.get()
         return released
     }
 
     override fun close() {
-        if (closed) return
-        closed = true
-        serial.submit {
-            scheduler?.clear(StopReason.SERVICE_DESTROYED)
-            scheduler?.close()
-            controller?.stop(StopReason.SERVICE_DESTROYED)
-            controller?.disconnect()
-            (controller as? AutoCloseable)?.close()
-            scheduler = null
-            controller = null
-        }.get()
+        synchronized(stateLock) {
+            if (closed || closing) return
+        }
+        val task = synchronized(stateLock) {
+            closing = true
+            teardownController = controller
+            serial.submit {
+                scheduler?.clear(StopReason.SERVICE_DESTROYED)
+                scheduler?.close()
+                controller?.stop(StopReason.SERVICE_DESTROYED)
+                controller?.disconnect()
+                (controller as? AutoCloseable)?.close()
+                scheduler = null
+                controller = null
+                synchronized(stateLock) {
+                    closed = true
+                    closing = false
+                }
+            }
+        }
+        task.get()
         serial.shutdownNow()
     }
 

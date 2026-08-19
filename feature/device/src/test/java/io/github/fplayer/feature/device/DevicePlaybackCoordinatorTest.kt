@@ -76,6 +76,43 @@ class DevicePlaybackCoordinatorTest {
         coordinator.close()
     }
 
+    @Test
+    fun closeKeepsControllerOperationsOnCoordinatorBoundaryUntilTeardownCompletes() {
+        val controller = BlockingController().also { it.blockStop = true }
+        val coordinator = DevicePlaybackCoordinator(
+            PlaybackClock {
+                PlayerSnapshot(MediaId("synthetic"), 0L, 1_000L, 1.0, true, false)
+            },
+        )
+        coordinator.onControllerConnected(controller)
+
+        val closeFinished = CountDownLatch(1)
+        Thread({ coordinator.close(); closeFinished.countDown() }, "coordinator-close-test")
+            .also { it.start() }
+        assertTrue(controller.stopEntered.await(2, TimeUnit.SECONDS))
+
+        val operationRan = CountDownLatch(1)
+        val operationFinished = CountDownLatch(1)
+        Thread({
+            assertTrue(coordinator.runControllerOperation(controller) { operationRan.countDown() })
+            operationFinished.countDown()
+        }, "session-close-race-test").also { it.start() }
+
+        val releaseFinished = CountDownLatch(1)
+        Thread({
+            assertTrue(coordinator.releaseController(controller, StopReason.CONNECTION_LOST))
+            releaseFinished.countDown()
+        }, "session-release-race-test").also { it.start() }
+
+        assertFalse(operationRan.await(150, TimeUnit.MILLISECONDS))
+        controller.releaseStop.countDown()
+        assertTrue(closeFinished.await(2, TimeUnit.SECONDS))
+        assertTrue(operationFinished.await(2, TimeUnit.SECONDS))
+        assertTrue(releaseFinished.await(2, TimeUnit.SECONDS))
+        assertFalse(operationRan.await(100, TimeUnit.MILLISECONDS))
+        assertEquals(listOf(StopReason.SERVICE_DESTROYED), controller.stopReasons)
+    }
+
     private fun singleAxisBundle() = ScriptBundle(
         mapOf(
             AxisId("L0") to ScriptTrack(
@@ -91,6 +128,8 @@ class DevicePlaybackCoordinatorTest {
         val releaseSubmit = CountDownLatch(1)
         val maximumConcurrentOperations = AtomicInteger()
         val stopReasons = CopyOnWriteArrayList<StopReason>()
+        val releaseStop = CountDownLatch(1)
+        var blockStop = false
         private val activeOperations = AtomicInteger()
 
         override fun connect() = Unit
@@ -103,6 +142,7 @@ class DevicePlaybackCoordinatorTest {
         override fun stop(reason: StopReason) = operation {
             stopReasons += reason
             stopEntered.countDown()
+            if (blockStop) releaseStop.await(2, TimeUnit.SECONDS)
         }
 
         override fun disconnect() = Unit
