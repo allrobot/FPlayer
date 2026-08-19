@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,6 +16,18 @@ if SPEC is None or SPEC.loader is None:  # pragma: no cover - import contract
     raise ImportError(f"cannot load {GENERATOR}")
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+
+ASSEMBLER = Path(__file__).resolve().parents[1] / "assemble-notices.py"
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _load_assembler():
+    spec = importlib.util.spec_from_file_location("assemble_notices", ASSEMBLER)
+    if spec is None or spec.loader is None:  # pragma: no cover - import contract
+        raise ImportError(f"cannot load {ASSEMBLER}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class LicenseMatrixTests(unittest.TestCase):
@@ -148,6 +161,168 @@ class LicenseMatrixTests(unittest.TestCase):
     def test_missing_gradle_report_fails_closed(self) -> None:
         with self.assertRaises(MODULE.LicenseMatrixError):
             self._generate(self.root / "missing-report.json")
+
+
+class NoticeAssemblyTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.module = _load_assembler()
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.license_root = self.root / "licenses"
+        self.license_root.mkdir()
+        for component, filename, text in (
+            ("alpha", "COPYING", "alpha first\n"),
+            ("alpha", "NOTICE", "alpha second\n"),
+            ("reference", "LICENSE", "reference only\n"),
+            ("zulu", "LICENSE", "zulu text\n"),
+        ):
+            path = self.license_root / component / filename
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        self.project_license = self.root / "LICENSE"
+        self.project_license.write_text("project license\n", encoding="utf-8")
+        self.matrix = self.root / "license-matrix.json"
+        self.notice = self.root / "NOTICE"
+        self.third_party = self.root / "THIRD_PARTY_LICENSES"
+        self.entries = [
+            self._entry("native:zulu", ["licenses/zulu/LICENSE"]),
+            self._entry(
+                "native:reference",
+                ["licenses/reference/LICENSE"],
+                runtime_scope="reference-only",
+            ),
+            self._entry(
+                "native:alpha",
+                ["licenses/alpha/NOTICE", "licenses/alpha/COPYING"],
+            ),
+        ]
+        self._write_matrix(self.entries)
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    @staticmethod
+    def _entry(
+        component_id: str,
+        notice_paths: list[str],
+        *,
+        runtime_scope: str = "runtime",
+    ) -> dict:
+        return {
+            "id": component_id,
+            "source_role": "runtime-static",
+            "revision_or_hash": "a" * 40,
+            "linkage": "static",
+            "license_expression": "MIT",
+            "selected_license": "MIT",
+            "notice_paths": notice_paths,
+            "runtime_scope": runtime_scope,
+            "evidence_refs": ["evidence/source-manifest.json"],
+        }
+
+    def _write_matrix(self, entries: list[dict]) -> None:
+        self.matrix.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "status": "PASS",
+                    "lock_id": "fixture-lock",
+                    "generation_inputs": {},
+                    "entries": entries,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def _assemble(self) -> None:
+        self.module.assemble_notices(
+            self.matrix,
+            self.license_root,
+            self.notice,
+            self.third_party,
+            self.project_license,
+        )
+
+    def test_stable_order_preserves_runtime_notice_files(self) -> None:
+        self._assemble()
+        notice = self.notice.read_text(encoding="utf-8")
+        bundle = self.third_party.read_text(encoding="utf-8")
+        self.assertLess(notice.index("native:alpha"), notice.index("native:reference"))
+        self.assertLess(notice.index("native:reference"), notice.index("native:zulu"))
+        self.assertLess(bundle.index("licenses/alpha/COPYING"), bundle.index("licenses/alpha/NOTICE"))
+        self.assertLess(bundle.index("licenses/alpha/NOTICE"), bundle.index("licenses/zulu/LICENSE"))
+        self.assertIn("alpha first", bundle)
+        self.assertIn("alpha second", bundle)
+        self.assertIn("zulu text", bundle)
+        self.assertNotIn("reference only", bundle)
+
+    def test_duplicate_component_notice_pair_is_rejected(self) -> None:
+        duplicate = self._entry(
+            "native:alpha",
+            ["licenses/alpha/COPYING", "licenses/alpha/COPYING"],
+        )
+        self._write_matrix([duplicate])
+        with self.assertRaises(self.module.NoticeAssemblyError):
+            self._assemble()
+
+    def test_missing_or_empty_license_file_is_rejected(self) -> None:
+        missing = self.license_root / "zulu" / "LICENSE"
+        missing.unlink()
+        with self.assertRaises(self.module.NoticeAssemblyError):
+            self._assemble()
+        missing.write_text("", encoding="utf-8")
+        with self.assertRaises(self.module.NoticeAssemblyError):
+            self._assemble()
+
+    def test_repeated_runs_are_byte_identical(self) -> None:
+        self._assemble()
+        first_notice = self.notice.read_bytes()
+        first_bundle = self.third_party.read_bytes()
+        self._assemble()
+        self.assertEqual(first_notice, self.notice.read_bytes())
+        self.assertEqual(first_bundle, self.third_party.read_bytes())
+
+
+class DocumentationTests(unittest.TestCase):
+    DOCUMENTS = (
+        ROOT / "docs" / "compliance" / "source-attribution.md",
+        ROOT / "docs" / "privacy" / "privacy.md",
+        ROOT / "docs" / "release" / "release-gates.md",
+    )
+
+    def test_release_documents_cover_ownership_privacy_and_blocked_gates(self) -> None:
+        attribution, privacy, gates = [
+            path.read_text(encoding="utf-8") for path in self.DOCUMENTS
+        ]
+        self.assertIn("GPL-3.0-or-later", attribution)
+        self.assertIn("docs/compliance/license-matrix.json", attribution)
+        self.assertIn("semantic-reference", attribution)
+        self.assertIn("REF_TCODE_FIRMWARE", attribution)
+        self.assertIn("Keystore", privacy)
+        self.assertIn("no analytics upload", privacy.lower())
+        self.assertRegex(privacy.lower(), r"(redact|sanitiz).*(log|diagnostic)")
+        self.assertIn("TEST_TABLET", privacy)
+        self.assertIn("FUNSCRIPT_TEST_LIBRARY", privacy)
+        self.assertIn("RELEASE-TAG", gates)
+        self.assertIn("RELEASE-SIGN", gates)
+        self.assertIn("BLOCKED", gates)
+        self.assertRegex(gates, r"missing annotated release tag.*BLOCKED")
+        self.assertRegex(gates, r"missing production signing identity.*BLOCKED")
+
+    def test_release_documents_use_only_relative_paths_and_logical_resources(self) -> None:
+        forbidden = (
+            re.compile(r"(?i)\b[A-Z]:[\\/]"),
+            re.compile(r"(?i)/(?:Users|home|mnt)/"),
+            re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"),
+            re.compile(r"(?i)\bCOM\d+\b|/dev/tty"),
+            re.compile(r"(?i)password\s*[:=]|username\s*[:=]"),
+            re.compile(r"(?i)\.(?:mp4|mkv|avi|mov|funscript)\b"),
+        )
+        for path in self.DOCUMENTS:
+            text = path.read_text(encoding="utf-8")
+            for pattern in forbidden:
+                with self.subTest(path=path.name, pattern=pattern.pattern):
+                    self.assertIsNone(pattern.search(text))
 
 
 if __name__ == "__main__":

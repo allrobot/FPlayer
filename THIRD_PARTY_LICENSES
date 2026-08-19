@@ -1,0 +1,8 @@
+FPlayer THIRD_PARTY_LICENSES
+============================
+
+License matrix: docs/compliance/license-matrix.json
+License matrix status: BLOCKED
+License matrix SHA-256: 812DC2D12F7351D19D8BB93312C9D75C4BD8D14028B887680D90CC2759BEF76A
+
+No third-party license text is assembled while the license matrix is non-PASS.

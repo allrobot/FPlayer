@@ -15,6 +15,7 @@ native-build/*
 !native-build/collect-evidence.py
 !native-build/build-arm64.sh
 !native-build/verify-reproducible.sh
+!native-build/assemble-notices.py
 native-build/out-*/
 native-build/work-*/
 native-build/cache/
