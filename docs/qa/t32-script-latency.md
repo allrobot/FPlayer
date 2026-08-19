@@ -16,6 +16,10 @@ This record covers deterministic estimator, scheduler, device-session, and servi
 | Service lifecycle | PASS | Service ticks from the player snapshot loop and clears before pause, stop, discontinuity, task/service destruction, and device loss. Binder exposes explicit script load/manual submission entry points. |
 | Range and safety path | PASS | Manual and scripted targets use the scheduler and then `DeviceSafetyController`; no direct transport frame path is exposed to UI. |
 | Real-resource gates | BLOCKED / NOT RUN | The sibling plan must supply physical WS/BLE/SPP/USB loopback and authorized media evidence before any real-device claim. |
+| Final deterministic verification | PASS | Clean, single-worker JDK 17 execution re-ran the scheduler, estimator, range, settings, device-session, and service tests. Expected recordings assert sorted axis order, targets, durations, generations, media timestamps, signed effective offsets, and stop sequences. The automatic-offset test changes script position while preserving the media timestamp. |
+| Queue and lifecycle cleanup | PASS | Safety/controller tests cover clamped `0..100` targets, script/device-range intersection, stale-generation rejection, and idempotent pause, disconnect, and release stops. |
+| Protocol-specific estimate | BLOCKED | Only the synthetic correlated WebSocket ping/pong hook has evidence. TCP, UDP, BLE, SPP, and USB require a validated transport response sample; write completion, acknowledgements, and arbitrary inbound bytes remain invalid substitutes. |
+| Physical transport and real media | NOT RUN / BLOCKED | This verification did not access devices or media. Physical WS/BLE/SPP/USB and authorized real-media claims remain gated on sibling-plan evidence under the test-device policy. |
 
 ## Commands
 
@@ -33,7 +37,18 @@ PASS
 
 git diff --check
 PASS
+
+gradlew :core:script:testDebugUnitTest :core:device:testDebugUnitTest :feature:device:testDebugUnitTest :feature:settings:testDebugUnitTest :app:testDebugUnitTest --no-configuration-cache --rerun-tasks --max-workers=1 --no-daemon
+PASS (BUILD SUCCESSFUL; 196 actionable tasks executed)
+
+gradlew :app:assembleDebug --no-configuration-cache --max-workers=1 --no-daemon
+PASS (BUILD SUCCESSFUL; 221 actionable tasks, 7 executed)
+
+Get-ChildItem -Recurse -File | Where-Object { $_.Name -like '*.tmp.*' } | Select-Object -ExpandProperty FullName
+PASS (no matching artifacts)
 ```
+
+The first clean test attempt encountered an OS file lock left by competing Gradle daemons before any test task ran. After `gradlew --stop`, the documented command completed successfully with a single-use daemon; this is an environment cleanup event, not a product test failure.
 
 ## Redaction
 
