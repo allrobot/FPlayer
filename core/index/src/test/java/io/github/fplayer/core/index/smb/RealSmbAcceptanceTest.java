@@ -37,25 +37,25 @@ import static org.junit.Assert.assertTrue;
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 35)
 public final class RealSmbAcceptanceTest {
-    private static final String SOURCE_ID = "t31-real-smb";
-    private static final String CREDENTIAL_REF = "t31-runtime";
+    private static final String SOURCE_ID = "t32-real-smb";
+    private static final String CREDENTIAL_REF = "t32-runtime";
 
     @Test public void realScanAndConnectionCutPreserveCommittedSnapshot() {
         Assume.assumeTrue("REAL_SMB_ACCEPTANCE_DISABLED",
-                "true".equalsIgnoreCase(System.getenv("FPLAYER_T31_SMB_ENABLED")));
+                "true".equalsIgnoreCase(System.getenv("FPLAYER_T32_SMB_ENABLED")));
 
         String phase = "ENV";
         FPlayerIndexDatabase database = null;
         InMemoryCredentialStore credentials = new InMemoryCredentialStore();
         char[] password = null;
         try {
-            String host = requiredEnvironment("FPLAYER_T31_SMB_HOST");
-            int port = integerEnvironment("FPLAYER_T31_SMB_PORT", 1, 65_535);
-            String share = requiredEnvironment("FPLAYER_T31_SMB_SHARE");
-            String root = requiredEnvironment("FPLAYER_T31_SMB_ROOT");
-            int expectedMedia = integerEnvironment("FPLAYER_T31_SMB_MEDIA_COUNT", 1, 1_000);
-            String username = System.getenv("FPLAYER_T31_SMB_USERNAME");
-            String passwordValue = System.getenv("FPLAYER_T31_SMB_PASSWORD");
+            String host = requiredEnvironment("FPLAYER_T32_SMB_HOST");
+            int port = integerEnvironment("FPLAYER_T32_SMB_PORT", 1, 65_535);
+            String share = requiredEnvironment("FPLAYER_T32_SMB_SHARE");
+            String root = requiredEnvironment("FPLAYER_T32_SMB_ROOT");
+            int expectedMedia = integerEnvironment("FPLAYER_T32_SMB_MEDIA_COUNT", 1, 1_000);
+            String username = System.getenv("FPLAYER_T32_SMB_USERNAME");
+            String passwordValue = System.getenv("FPLAYER_T32_SMB_PASSWORD");
             String credentialRef = null;
             if (username != null && !username.isBlank()) {
                 if (passwordValue == null || passwordValue.isEmpty()) {
@@ -141,7 +141,7 @@ public final class RealSmbAcceptanceTest {
     ) {
         return new SmbSourceConfig(
                 SOURCE_ID,
-                "T31 SMB",
+                "T32 SMB",
                 host,
                 port,
                 share,
@@ -210,7 +210,7 @@ public final class RealSmbAcceptanceTest {
             this.targetPort = targetPort;
             listener = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
             executor = Executors.newCachedThreadPool(runnable -> {
-                Thread thread = new Thread(runnable, "t31-smb-proxy");
+                Thread thread = new Thread(runnable, "t32-smb-proxy");
                 thread.setDaemon(true);
                 return thread;
             });

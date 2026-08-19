@@ -36,8 +36,8 @@ import static org.junit.Assert.assertTrue;
 /** Runtime-gated SMB acceptance on TEST_TABLET's Android network stack. */
 @RunWith(AndroidJUnit4.class)
 public final class RealSmbInstrumentedAcceptanceTest {
-    private static final String SOURCE_ID = "t31-device-smb";
-    private static final String CREDENTIAL_REF = "t31-device-runtime";
+    private static final String SOURCE_ID = "t32-device-smb";
+    private static final String CREDENTIAL_REF = "t32-device-runtime";
 
     @Test public void realScanAndConnectionCutPreserveCommittedSnapshot() {
         Bundle arguments = InstrumentationRegistry.getArguments();
@@ -138,7 +138,7 @@ public final class RealSmbInstrumentedAcceptanceTest {
     ) {
         return new SmbSourceConfig(
                 SOURCE_ID,
-                "T31 Device SMB",
+                "T32 Device SMB",
                 host,
                 port,
                 share,
@@ -214,7 +214,7 @@ public final class RealSmbInstrumentedAcceptanceTest {
             this.targetPort = targetPort;
             listener = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
             executor = Executors.newCachedThreadPool(runnable -> {
-                Thread thread = new Thread(runnable, "t31-device-smb-proxy");
+                Thread thread = new Thread(runnable, "t32-device-smb-proxy");
                 thread.setDaemon(true);
                 return thread;
             });

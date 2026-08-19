@@ -5,6 +5,7 @@
 - 当前阶段：先完成 T32 四份子计划和 Task 0 证据资产，再按 UI、脚本、设备媒体、发布合规顺序实施；不改固件、native 锁、设备持久配置或无关模块
 - 输入与验收：`TASKS.md` T32、`SPEC.md`、架构/安全文档、最早“方案定制”结论及用户授权的 `TEST_TABLET`、`TEST_OSR_WIFI`、`FUNSCRIPT_TEST_LIBRARY`；真实媒体只在 SAF 只读授权后读取
 - 上次 checkpoint：T31 Android SMBJ 跨主机扫描及断线旧 generation 保持通过；服务、规则、fixture、测试包和进程已清零，认证外部 SMB 与物理设备仍未完成，详见 `docs/qa/t31-report.md`
+- [2026-08-20] T32 设备媒体预检：运行时门控 SMB 主机/仪器测试改用 `FPLAYER_T32_SMB_*` 与 `t32-*` 逻辑标识；新增合成 SMB I/O 失败测试，确认失败码脱敏、工作 generation 标记 incomplete 且旧 current snapshot 保持不变。JDK 17 `:core:index:testDebugUnitTest --tests '*Smb*' --tests '*LocalSafScannerTest'`（48 Gradle tasks）及 `:core:device:testDebugUnitTest :feature:device:testDebugUnitTest`（60 Gradle tasks）通过。未访问凭据、真实 SMB、SAF、设备或外部资源。
 - 用户授权（2026-08-11/19）：允许按安全策略读写真实 SMB/媒体/设备并调用 ADB/transport；平板提供多轴/单轴逻辑来源，允许临时 `TEST_OSR_WIFI` WebSocket 和独立 SPP，凭据只在运行时使用
 - 环境预检：平板可移除存储来源待 SAF 授权（盘点约 129/411 与 124/124 文件计数）；本机未确认唯一 `TEST_OSR_SERIAL`，串口/实物 gate 仍阻塞
 

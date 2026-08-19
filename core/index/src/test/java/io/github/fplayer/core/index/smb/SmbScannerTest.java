@@ -75,6 +75,22 @@ public final class SmbScannerTest {
         assertEquals(1, dao.currentMediaCount("smb-source"));
     }
 
+    @Test public void ioFailureResultIsRedactedAndPreservesCommittedSnapshot() throws IOException {
+        SmbSourceConfig config = SmbSourceConfig.defaults("smb-source", "NAS", "nas", "media", "cred");
+        SmbScanner scanner = new SmbScanner(dao, () -> 2L);
+        assertEquals(SmbScanner.SmbScanResult.State.ONLINE,
+                scanner.scan(config, 1L, new FixtureTree(true), LocalSafScanner.Cancellation.NEVER).state);
+
+        SmbScanner.SmbScanResult failed = scanner.scan(
+                config, 2L, new IOExceptionTree(), LocalSafScanner.Cancellation.NEVER);
+
+        assertEquals(SmbScanner.SmbScanResult.State.FAILED, failed.state);
+        assertEquals("SMB_IO_FAILED", failed.failureCode);
+        assertEquals(IndexDao.SCAN_INCOMPLETE, dao.scanStatus("smb-source", 2L));
+        assertEquals(Long.valueOf(1L), dao.source("smb-source").currentScanGeneration);
+        assertEquals(1, dao.currentMediaCount("smb-source"));
+    }
+
     private static final class FixtureTree implements SmbDocumentTree {
         private final boolean online;
         FixtureTree(boolean online) { this.online = online; }
@@ -96,5 +112,11 @@ public final class SmbScannerTest {
             if (directory == root) return List.of(folder);
             throw new IOException("synthetic disconnect");
         }
+    }
+
+    private static final class IOExceptionTree implements SmbDocumentTree {
+        @Override public boolean isOnline() { return true; }
+        @Override public Entry root() throws IOException { throw new IOException("synthetic failure"); }
+        @Override public List<Entry> children(Entry directory) { return List.of(); }
     }
 }
