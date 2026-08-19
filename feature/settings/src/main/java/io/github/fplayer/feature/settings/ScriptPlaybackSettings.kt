@@ -81,6 +81,11 @@ val ScriptPlaybackSettingsStateSaver: Saver<ScriptPlaybackSettingsState, List<An
                 },
             state.selectedManualAxis.value,
             state.manualPosition,
+            state.estimate.state.name,
+            state.estimate.automaticOffsetMs,
+            state.estimate.medianRoundTripMs,
+            state.estimate.sampleCount,
+            state.estimate.measuredAtMonotonicMs,
         )
     },
     restore = { values ->
@@ -100,6 +105,13 @@ val ScriptPlaybackSettingsStateSaver: Saver<ScriptPlaybackSettingsState, List<An
             outputLimits = ScriptOutputLimits(ranges),
             selectedManualAxis = AxisId(values[3] as String),
             manualPosition = (values[4] as Number).toInt(),
+            estimate = LatencyEstimate(
+                state = LatencyMeasurementState.valueOf(values[5] as String),
+                automaticOffsetMs = (values[6] as Number).toLong(),
+                medianRoundTripMs = (values[7] as Number?)?.toLong(),
+                sampleCount = (values[8] as Number).toInt(),
+                measuredAtMonotonicMs = (values[9] as Number?)?.toLong(),
+            ),
         )
     },
 )
