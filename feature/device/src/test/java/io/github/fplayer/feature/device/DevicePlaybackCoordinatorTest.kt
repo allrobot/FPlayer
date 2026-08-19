@@ -11,6 +11,7 @@ import io.github.fplayer.core.script.PlaybackClock
 import io.github.fplayer.core.script.ScriptBundle
 import io.github.fplayer.core.script.ScriptTrack
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
@@ -57,11 +58,39 @@ class DevicePlaybackCoordinatorTest {
         coordinator.close()
     }
 
+    @Test
+    fun directConnectionLossCallbackClearsActiveSchedulerWithLiveController() {
+        val controller = BlockingController().also { it.releaseSubmit.countDown() }
+        val coordinator = DevicePlaybackCoordinator(
+            PlaybackClock {
+                PlayerSnapshot(MediaId("synthetic"), 0L, 1_000L, 1.0, true, false)
+            },
+        )
+        coordinator.onControllerConnected(controller)
+        coordinator.load(singleAxisBundle())
+        coordinator.tick()
+
+        coordinator.onConnectionLost()
+
+        assertEquals(listOf(StopReason.CONNECTION_LOST), controller.stopReasons)
+        coordinator.close()
+    }
+
+    private fun singleAxisBundle() = ScriptBundle(
+        mapOf(
+            AxisId("L0") to ScriptTrack(
+                AxisId("L0"),
+                listOf(ScriptAction(0L, 50), ScriptAction(500L, 60)),
+            ),
+        ),
+    )
+
     private class BlockingController : DeviceController {
         val submitEntered = CountDownLatch(1)
         val stopEntered = CountDownLatch(1)
         val releaseSubmit = CountDownLatch(1)
         val maximumConcurrentOperations = AtomicInteger()
+        val stopReasons = CopyOnWriteArrayList<StopReason>()
         private val activeOperations = AtomicInteger()
 
         override fun connect() = Unit
@@ -72,6 +101,7 @@ class DevicePlaybackCoordinatorTest {
         }
 
         override fun stop(reason: StopReason) = operation {
+            stopReasons += reason
             stopEntered.countDown()
         }
 

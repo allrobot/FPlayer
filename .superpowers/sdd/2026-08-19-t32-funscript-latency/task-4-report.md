@@ -68,3 +68,16 @@ DeviceSessionTest: 9 tests, 0 failures, 0 errors, 0 skipped
 ManualAxisOutputIntegrationTest: 2 tests, 0 failures, 0 errors, 0 skipped
 git diff --check: PASS
 ```
+
+Independent re-review follow-up:
+
+- Removed the coordinator `onConnectionLost` early return that could skip scheduler clearing while a controller was still attached. Direct lifecycle callback coverage now observes one `CONNECTION_LOST` stop.
+- Added once-per-connection notification state and remote-loss transport detachment/close. Remote loss followed by session close emits `onConnectionLost` exactly once.
+
+Re-review focused command (JDK 17) passed with 30 tests and zero failures/errors/skips:
+
+```text
+JAVA_HOME=<JDK17> gradlew :core:device:testDebugUnitTest --tests '*NetworkDeviceTransportsTest' :core:script:testDebugUnitTest --tests '*ScriptLatencyRecordingIntegrationTest' :feature:device:testDebugUnitTest --tests '*DevicePlaybackCoordinatorTest' --tests '*DeviceSessionTest' --tests '*ManualAxisOutputIntegrationTest' --rerun-tasks --no-daemon --max-workers=1
+BUILD SUCCESSFUL in 55s
+NetworkDeviceTransportsTest: 12; ScriptLatencyRecordingIntegrationTest: 4; DevicePlaybackCoordinatorTest: 2; DeviceSessionTest: 10; ManualAxisOutputIntegrationTest: 2
+```

@@ -71,6 +71,8 @@ class DeviceSession(
     private val operationEpoch = AtomicLong(0)
     private val testEpoch = AtomicLong(0)
     private val testRunning = AtomicBoolean(false)
+    private val sessionClosed = AtomicBoolean(false)
+    private val connectionLossNotified = AtomicBoolean(true)
     private val lock = Any()
     private val controllerSerial: ExecutorService = Executors.newSingleThreadExecutor { task ->
         Thread(task, "device-controller-serial").also { it.isDaemon = true }
@@ -182,7 +184,10 @@ class DeviceSession(
                     ),
                     created,
                 ).also(DeviceSafetyController::connect)
-                synchronized(lock) { controller = safetyController }
+                synchronized(lock) {
+                    controller = safetyController
+                    connectionLossNotified.set(false)
+                }
                 lifecycle?.onControllerConnected(safetyController)
                 emit(
                     DeviceSessionEvent.ConnectionChanged(
@@ -293,6 +298,7 @@ class DeviceSession(
     }
 
     override fun close() {
+        if (!sessionClosed.compareAndSet(false, true)) return
         operationEpoch.incrementAndGet()
         testEpoch.incrementAndGet()
         testRunning.set(false)
@@ -323,7 +329,7 @@ class DeviceSession(
                 (it as? AutoCloseable)?.close()
             }
         }
-        if (activeController != null || activeTransport != null) {
+        if (activeController != null && connectionLossNotified.compareAndSet(false, true)) {
             lifecycle?.onConnectionLost()
         }
         runCatching { activeTransport?.disconnect() }
@@ -334,10 +340,13 @@ class DeviceSession(
         testEpoch.incrementAndGet()
         val wasTesting = testRunning.getAndSet(false)
         var detachedController: DeviceSafetyController? = null
+        var detachedTransport: DeviceTransport? = null
         synchronized(lock) {
             if (transport === candidate) {
                 detachedController = controller
+                detachedTransport = transport
                 controller = null
+                transport = null
             }
         }
         synchronized(latencyEstimator) { latencyEstimator.reset() }
@@ -348,9 +357,14 @@ class DeviceSession(
         if (!releasedByLifecycle) {
             runLocalControllerOperation(detachedController) {
                 (it as? DeviceSafetyController)?.onConnectionLost()
+                (it as? AutoCloseable)?.close()
             }
         }
-        if (detachedController != null) lifecycle?.onConnectionLost()
+        if (detachedController != null && connectionLossNotified.compareAndSet(false, true)) {
+            lifecycle?.onConnectionLost()
+        }
+        runCatching { detachedTransport?.disconnect() }
+        runCatching { detachedTransport?.close() }
         if (wasTesting) emit(DeviceSessionEvent.TestProgress(running = false))
     }
 

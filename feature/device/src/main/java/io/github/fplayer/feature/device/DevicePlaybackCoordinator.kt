@@ -96,9 +96,6 @@ class DevicePlaybackCoordinator(
     }
 
     override fun onConnectionLost() = submit {
-        // The session's release hook owns controller teardown. This callback is
-        // retained for lifecycle notification and only clears stale scheduler state.
-        if (controller != null) return@submit
         scheduler?.clear(StopReason.CONNECTION_LOST)
         scheduler?.close()
         scheduler = null

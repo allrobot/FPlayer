@@ -214,6 +214,34 @@ class DeviceSessionTest {
     }
 
     @Test
+    fun remoteLossThenCloseDoesNotNotifyConnectionLossTwice() {
+        val backend = FakeBackend()
+        val connectionLost = java.util.concurrent.atomic.AtomicInteger()
+        val lifecycle = object : DeviceSessionLifecycle {
+            override fun onConnectionLost() { connectionLost.incrementAndGet() }
+        }
+        val connected = CountDownLatch(1)
+        val session = DeviceSession(
+            backend = backend,
+            callbackExecutor = Executor(Runnable::run),
+            eventSink = { event ->
+                if (event is DeviceSessionEvent.ConnectionChanged &&
+                    event.status == DeviceConnectionStatus.CONNECTED
+                ) connected.countDown()
+            },
+            lifecycle = lifecycle,
+        )
+
+        session.connect(validRequest())
+        assertTrue(connected.await(2, TimeUnit.SECONDS))
+        backend.transport.remoteDisconnect()
+        Thread.sleep(100)
+        session.close()
+
+        assertEquals(1, connectionLost.get())
+    }
+
+    @Test
     fun earlyTransportCreationFailureHasStableFailureCode() {
         val backend = FakeBackend(createFailure = IllegalStateException("private backend detail"))
         val failed = CountDownLatch(1)
