@@ -1,0 +1,31 @@
+# T32 Evidence Index
+
+Date: 2026-08-19
+
+This index stores only repository-relative evidence, stable logical resource identifiers and non-sensitive aggregate results. It does not store external addresses, account names, credentials, physical port names, media names, locators or script content.
+
+| Evidence ID | Matrix IDs | Command or source | Result | Evidence location |
+| --- | --- | --- | --- | --- |
+| `BASELINE-UNIT-20260819` | all code gates | `gradlew testDebugUnitTest --no-configuration-cache --rerun-tasks --max-workers=1` | 36 XML suites, 199 tests, 0 failures, 0 errors, 1 expected runtime-gated skip; build successful | Generated module `build/test-results/` directories, not tracked |
+| `BASELINE-APK-20260819` | `UI-FEED`, `MEDIA-*`, `DEVICE-*` | `gradlew :app:assembleDebug --no-configuration-cache --max-workers=1` | Pass; 56,645,232 bytes; SHA-256 `8185B51C4182465670C9FE9CD0F6FB32E4E2139DFFF45871163EF118CDD035B8` | `app/build/outputs/apk/debug/app-debug.apk`, ignored build artifact |
+| `BASELINE-NATIVE-LOCK-20260819` | `RELEASE-LICENSE`, `RELEASE-REPRO` | `python native-build/verify-lock.py` | 20 locked sources and 14 build recipes; pass | `native-build/sources.lock.json`, `native-build/verify-lock.py` |
+| `BASELINE-HYGIENE-20260819` | all gates | `git diff --check` and controlled sensitive-value scan | Pass; local execution ledger, build output, credentials and signing material remain ignored | `.gitignore`, Task 0 command output |
+| `T31-AUTOMATION` | `DEVICE-*`, `SMB-REAL` | Prior performance and fault-injection acceptance | TCP/UDP/WebSocket loopback and anonymous cross-host SMB passed; authenticated external SMB and physical device remained open | `docs/qa/t31-report.md` |
+| `T31-TABLET` | `UI-FEED`, `MEDIA-*` | Prior API 33 background and lifecycle acceptance | Native playback, screen-off loop, notification permission, rotation, trim and cleanup passed with neutral fixture | `docs/qa/t31-report.md` |
+| `T32-PLAN-MASTER` | all gates | Master execution plan | Fixed gate IDs, ordering, safety constraints and final reporting rules | `docs/superpowers/plans/2026-08-19-t32-master-acceptance.md` |
+| `T32-PLAN-UI` | `UI-FEED` | UI comparison plan | Exact state, Surface, heatmap, viewport and cleanup tasks | `docs/superpowers/plans/2026-08-19-t32-ui-feed-comparison.md` |
+| `T32-PLAN-SCRIPT` | `SCRIPT-LATENCY` | Script latency and range plan | Exact latency, range, scheduler and settings tasks | `docs/superpowers/plans/2026-08-19-t32-funscript-latency.md` |
+| `T32-PLAN-DEVICE` | `DEVICE-*`, `MEDIA-*`, `SMB-REAL` | Device and media plan | Loopback-first, SAF, authenticated SMB, physical safety and cleanup tasks | `docs/superpowers/plans/2026-08-19-t32-device-media-acceptance.md` |
+| `T32-PLAN-RELEASE` | `RELEASE-*` | Release compliance plan | License, attribution, privacy, reproducibility and signing tasks | `docs/superpowers/plans/2026-08-19-t32-release-compliance.md` |
+
+## Count Authority
+
+The fresh XML aggregation and `docs/qa/t31-report.md` both report 36 suites and 199 tests. This fresh baseline supersedes any smaller informal summary count for T32 decisions.
+
+## Evidence Rules
+
+- A `PASS` requires direct evidence for the whole matrix row.
+- Synthetic, injected-backend or loopback results are prerequisites, not substitutes for a row that explicitly requires a real source or target.
+- Runtime credentials are cleared after use and never copied into this index.
+- Real media evidence is limited to aggregate counts, match rates, state transitions and stable non-reversible summaries.
+- Generated test XML and APK files remain ignored; only their aggregate result and cryptographic hash are recorded.

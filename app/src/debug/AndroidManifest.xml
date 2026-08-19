@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="io.github.fplayer.android.T31MediaLoopActivity"
+            android:exported="true"
+            android:screenOrientation="fullUser"
+            android:theme="@style/Theme.FPlayer" />
+        <activity
+            android:name="io.github.fplayer.android.T31PortraitActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.FPlayer" />
+        <activity
+            android:name="io.github.fplayer.android.T31LandscapeActivity"
+            android:exported="true"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.FPlayer" />
+        <activity
+            android:name="io.github.fplayer.android.DeviceScreenshotActivity"
+            android:exported="true"
+            android:screenOrientation="fullUser"
+            android:theme="@style/Theme.FPlayer" />
+        <activity
+            android:name="io.github.fplayer.android.LibraryScreenshotActivity"
+            android:exported="true"
+            android:screenOrientation="fullUser"
+            android:theme="@style/Theme.FPlayer" />
+        <activity
+            android:name="io.github.fplayer.android.CatalogScreenshotActivity"
+            android:exported="true"
+            android:screenOrientation="fullUser"
+            android:theme="@style/Theme.FPlayer" />
+    </application>
+</manifest>

@@ -1,0 +1,1120 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "1cfdc2336da1d9b26f89e9d20c7a4153",
+    "entities": [
+      {
+        "tableName": "source",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `type` TEXT NOT NULL, `displayName` TEXT NOT NULL, `rootLocator` TEXT NOT NULL, `authRef` TEXT, `currentScanGeneration` INTEGER, `createdAtEpochMs` INTEGER NOT NULL, `updatedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rootLocator",
+            "columnName": "rootLocator",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authRef",
+            "columnName": "authRef",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "currentScanGeneration",
+            "columnName": "currentScanGeneration",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAtEpochMs",
+            "columnName": "createdAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtEpochMs",
+            "columnName": "updatedAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_source_type_rootLocator",
+            "unique": true,
+            "columnNames": [
+              "type",
+              "rootLocator"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_source_type_rootLocator` ON `${TABLE_NAME}` (`type`, `rootLocator`)"
+          }
+        ]
+      },
+      {
+        "tableName": "folder",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `scanGeneration` INTEGER NOT NULL, `sourceId` TEXT NOT NULL, `parentId` TEXT, `normalizedPath` TEXT NOT NULL, `displayName` TEXT NOT NULL, `directMediaCount` INTEGER NOT NULL, `descendantMediaCount` INTEGER NOT NULL, PRIMARY KEY(`id`, `scanGeneration`), FOREIGN KEY(`sourceId`) REFERENCES `source`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scanGeneration",
+            "columnName": "scanGeneration",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parentId",
+            "columnName": "parentId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "normalizedPath",
+            "columnName": "normalizedPath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "directMediaCount",
+            "columnName": "directMediaCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "descendantMediaCount",
+            "columnName": "descendantMediaCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id",
+            "scanGeneration"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_folder_sourceId",
+            "unique": false,
+            "columnNames": [
+              "sourceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_folder_sourceId` ON `${TABLE_NAME}` (`sourceId`)"
+          },
+          {
+            "name": "index_folder_sourceId_scanGeneration",
+            "unique": false,
+            "columnNames": [
+              "sourceId",
+              "scanGeneration"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_folder_sourceId_scanGeneration` ON `${TABLE_NAME}` (`sourceId`, `scanGeneration`)"
+          },
+          {
+            "name": "index_folder_sourceId_scanGeneration_normalizedPath",
+            "unique": true,
+            "columnNames": [
+              "sourceId",
+              "scanGeneration",
+              "normalizedPath"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_folder_sourceId_scanGeneration_normalizedPath` ON `${TABLE_NAME}` (`sourceId`, `scanGeneration`, `normalizedPath`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "source",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "sourceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "media",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `scanGeneration` INTEGER NOT NULL, `sourceId` TEXT NOT NULL, `folderId` TEXT NOT NULL, `stableKey` TEXT NOT NULL, `locator` TEXT NOT NULL, `displayName` TEXT NOT NULL, `normalizedTitle` TEXT NOT NULL, `normalizedPath` TEXT NOT NULL, `sizeBytes` INTEGER, `modifiedAtEpochMs` INTEGER, `durationMs` INTEGER, `width` INTEGER, `height` INTEGER, `frameRate` REAL, `mimeType` TEXT, `videoCodec` TEXT, `audioCodec` TEXT, `subtitleCount` INTEGER, `probeStatus` TEXT NOT NULL, PRIMARY KEY(`id`, `scanGeneration`), FOREIGN KEY(`sourceId`) REFERENCES `source`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`folderId`, `scanGeneration`) REFERENCES `folder`(`id`, `scanGeneration`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scanGeneration",
+            "columnName": "scanGeneration",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "folderId",
+            "columnName": "folderId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stableKey",
+            "columnName": "stableKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "locator",
+            "columnName": "locator",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "normalizedTitle",
+            "columnName": "normalizedTitle",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "normalizedPath",
+            "columnName": "normalizedPath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sizeBytes",
+            "columnName": "sizeBytes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "modifiedAtEpochMs",
+            "columnName": "modifiedAtEpochMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "durationMs",
+            "columnName": "durationMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "width",
+            "columnName": "width",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "height",
+            "columnName": "height",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "frameRate",
+            "columnName": "frameRate",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "mimeType",
+            "columnName": "mimeType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "videoCodec",
+            "columnName": "videoCodec",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "audioCodec",
+            "columnName": "audioCodec",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "subtitleCount",
+            "columnName": "subtitleCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "probeStatus",
+            "columnName": "probeStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id",
+            "scanGeneration"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_media_sourceId",
+            "unique": false,
+            "columnNames": [
+              "sourceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_media_sourceId` ON `${TABLE_NAME}` (`sourceId`)"
+          },
+          {
+            "name": "index_media_folderId_scanGeneration",
+            "unique": false,
+            "columnNames": [
+              "folderId",
+              "scanGeneration"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_media_folderId_scanGeneration` ON `${TABLE_NAME}` (`folderId`, `scanGeneration`)"
+          },
+          {
+            "name": "index_media_sourceId_scanGeneration",
+            "unique": false,
+            "columnNames": [
+              "sourceId",
+              "scanGeneration"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_media_sourceId_scanGeneration` ON `${TABLE_NAME}` (`sourceId`, `scanGeneration`)"
+          },
+          {
+            "name": "index_media_sourceId_scanGeneration_stableKey",
+            "unique": true,
+            "columnNames": [
+              "sourceId",
+              "scanGeneration",
+              "stableKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_media_sourceId_scanGeneration_stableKey` ON `${TABLE_NAME}` (`sourceId`, `scanGeneration`, `stableKey`)"
+          },
+          {
+            "name": "index_media_sourceId_scanGeneration_normalizedTitle_id",
+            "unique": false,
+            "columnNames": [
+              "sourceId",
+              "scanGeneration",
+              "normalizedTitle",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_media_sourceId_scanGeneration_normalizedTitle_id` ON `${TABLE_NAME}` (`sourceId`, `scanGeneration`, `normalizedTitle`, `id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "source",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "sourceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "folder",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "folderId",
+              "scanGeneration"
+            ],
+            "referencedColumns": [
+              "id",
+              "scanGeneration"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "script",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `scanGeneration` INTEGER NOT NULL, `sourceId` TEXT NOT NULL, `mediaId` TEXT, `locator` TEXT NOT NULL, `normalizedBasename` TEXT NOT NULL, `axis` TEXT, `sizeBytes` INTEGER, `modifiedAtEpochMs` INTEGER, `parseStatus` TEXT NOT NULL, `actionCount` INTEGER NOT NULL, PRIMARY KEY(`id`, `scanGeneration`), FOREIGN KEY(`sourceId`) REFERENCES `source`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`mediaId`, `scanGeneration`) REFERENCES `media`(`id`, `scanGeneration`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scanGeneration",
+            "columnName": "scanGeneration",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mediaId",
+            "columnName": "mediaId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "locator",
+            "columnName": "locator",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "normalizedBasename",
+            "columnName": "normalizedBasename",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "axis",
+            "columnName": "axis",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sizeBytes",
+            "columnName": "sizeBytes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "modifiedAtEpochMs",
+            "columnName": "modifiedAtEpochMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "parseStatus",
+            "columnName": "parseStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actionCount",
+            "columnName": "actionCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id",
+            "scanGeneration"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_script_sourceId",
+            "unique": false,
+            "columnNames": [
+              "sourceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_script_sourceId` ON `${TABLE_NAME}` (`sourceId`)"
+          },
+          {
+            "name": "index_script_mediaId_scanGeneration",
+            "unique": false,
+            "columnNames": [
+              "mediaId",
+              "scanGeneration"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_script_mediaId_scanGeneration` ON `${TABLE_NAME}` (`mediaId`, `scanGeneration`)"
+          },
+          {
+            "name": "index_script_sourceId_scanGeneration_normalizedBasename",
+            "unique": false,
+            "columnNames": [
+              "sourceId",
+              "scanGeneration",
+              "normalizedBasename"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_script_sourceId_scanGeneration_normalizedBasename` ON `${TABLE_NAME}` (`sourceId`, `scanGeneration`, `normalizedBasename`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "source",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "sourceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "media",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "mediaId",
+              "scanGeneration"
+            ],
+            "referencedColumns": [
+              "id",
+              "scanGeneration"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "playback_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`mediaId` TEXT NOT NULL, `resumeMs` INTEGER NOT NULL, `lastPlayedAtEpochMs` INTEGER, `uniqueForegroundPlayedMs` INTEGER NOT NULL, `coveragePermille` INTEGER NOT NULL, `completionCount` INTEGER NOT NULL, `manualReplayCount` INTEGER NOT NULL, `foregroundLoopCount` INTEGER NOT NULL, `backgroundLoopCount` INTEGER NOT NULL, `skippedCount` INTEGER NOT NULL, `liked` INTEGER NOT NULL, `disliked` INTEGER NOT NULL, `favorite` INTEGER NOT NULL, PRIMARY KEY(`mediaId`))",
+        "fields": [
+          {
+            "fieldPath": "mediaId",
+            "columnName": "mediaId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "resumeMs",
+            "columnName": "resumeMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastPlayedAtEpochMs",
+            "columnName": "lastPlayedAtEpochMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "uniqueForegroundPlayedMs",
+            "columnName": "uniqueForegroundPlayedMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "coveragePermille",
+            "columnName": "coveragePermille",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completionCount",
+            "columnName": "completionCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "manualReplayCount",
+            "columnName": "manualReplayCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "foregroundLoopCount",
+            "columnName": "foregroundLoopCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "backgroundLoopCount",
+            "columnName": "backgroundLoopCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "skippedCount",
+            "columnName": "skippedCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "liked",
+            "columnName": "liked",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "disliked",
+            "columnName": "disliked",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "favorite",
+            "columnName": "favorite",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "mediaId"
+          ]
+        }
+      },
+      {
+        "tableName": "interaction_event",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `mediaId` TEXT NOT NULL, `type` TEXT NOT NULL, `occurredAtEpochMs` INTEGER NOT NULL, `payloadJson` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mediaId",
+            "columnName": "mediaId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "occurredAtEpochMs",
+            "columnName": "occurredAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payloadJson",
+            "columnName": "payloadJson",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_interaction_event_mediaId_occurredAtEpochMs",
+            "unique": false,
+            "columnNames": [
+              "mediaId",
+              "occurredAtEpochMs"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_interaction_event_mediaId_occurredAtEpochMs` ON `${TABLE_NAME}` (`mediaId`, `occurredAtEpochMs`)"
+          },
+          {
+            "name": "index_interaction_event_type_occurredAtEpochMs",
+            "unique": false,
+            "columnNames": [
+              "type",
+              "occurredAtEpochMs"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_interaction_event_type_occurredAtEpochMs` ON `${TABLE_NAME}` (`type`, `occurredAtEpochMs`)"
+          }
+        ]
+      },
+      {
+        "tableName": "recommendation_aggregate",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`mediaId` TEXT NOT NULL, `totalForegroundPlayedMs` INTEGER NOT NULL, `completionCount` INTEGER NOT NULL, `manualReplayCount` INTEGER NOT NULL, `foregroundLoopCount` INTEGER NOT NULL, `backgroundLoopCount` INTEGER NOT NULL, `skippedCount` INTEGER NOT NULL, `decayedPositive` REAL NOT NULL, `decayedNegative` REAL NOT NULL, `updatedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`mediaId`))",
+        "fields": [
+          {
+            "fieldPath": "mediaId",
+            "columnName": "mediaId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalForegroundPlayedMs",
+            "columnName": "totalForegroundPlayedMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completionCount",
+            "columnName": "completionCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "manualReplayCount",
+            "columnName": "manualReplayCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "foregroundLoopCount",
+            "columnName": "foregroundLoopCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "backgroundLoopCount",
+            "columnName": "backgroundLoopCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "skippedCount",
+            "columnName": "skippedCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "decayedPositive",
+            "columnName": "decayedPositive",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "decayedNegative",
+            "columnName": "decayedNegative",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtEpochMs",
+            "columnName": "updatedAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "mediaId"
+          ]
+        }
+      },
+      {
+        "tableName": "thumbnail",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `scanGeneration` INTEGER NOT NULL, `sourceId` TEXT NOT NULL, `mediaId` TEXT, `folderId` TEXT, `cacheKey` TEXT NOT NULL, `status` TEXT NOT NULL, `generatedAtEpochMs` INTEGER, PRIMARY KEY(`id`, `scanGeneration`), FOREIGN KEY(`sourceId`) REFERENCES `source`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scanGeneration",
+            "columnName": "scanGeneration",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mediaId",
+            "columnName": "mediaId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "folderId",
+            "columnName": "folderId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "cacheKey",
+            "columnName": "cacheKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "generatedAtEpochMs",
+            "columnName": "generatedAtEpochMs",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id",
+            "scanGeneration"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_thumbnail_sourceId",
+            "unique": false,
+            "columnNames": [
+              "sourceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_thumbnail_sourceId` ON `${TABLE_NAME}` (`sourceId`)"
+          },
+          {
+            "name": "index_thumbnail_mediaId_scanGeneration",
+            "unique": false,
+            "columnNames": [
+              "mediaId",
+              "scanGeneration"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_thumbnail_mediaId_scanGeneration` ON `${TABLE_NAME}` (`mediaId`, `scanGeneration`)"
+          },
+          {
+            "name": "index_thumbnail_folderId_scanGeneration",
+            "unique": false,
+            "columnNames": [
+              "folderId",
+              "scanGeneration"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_thumbnail_folderId_scanGeneration` ON `${TABLE_NAME}` (`folderId`, `scanGeneration`)"
+          },
+          {
+            "name": "index_thumbnail_cacheKey",
+            "unique": false,
+            "columnNames": [
+              "cacheKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_thumbnail_cacheKey` ON `${TABLE_NAME}` (`cacheKey`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "source",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "sourceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "scan_generation",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sourceId` TEXT NOT NULL, `generation` INTEGER NOT NULL, `status` TEXT NOT NULL, `startedAtEpochMs` INTEGER NOT NULL, `completedAtEpochMs` INTEGER, `discoveredFolderCount` INTEGER NOT NULL, `discoveredMediaCount` INTEGER NOT NULL, `discoveredScriptCount` INTEGER NOT NULL, `failureCode` TEXT, PRIMARY KEY(`sourceId`, `generation`), FOREIGN KEY(`sourceId`) REFERENCES `source`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "generation",
+            "columnName": "generation",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAtEpochMs",
+            "columnName": "startedAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completedAtEpochMs",
+            "columnName": "completedAtEpochMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "discoveredFolderCount",
+            "columnName": "discoveredFolderCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "discoveredMediaCount",
+            "columnName": "discoveredMediaCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "discoveredScriptCount",
+            "columnName": "discoveredScriptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "failureCode",
+            "columnName": "failureCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "sourceId",
+            "generation"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_scan_generation_sourceId",
+            "unique": false,
+            "columnNames": [
+              "sourceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_scan_generation_sourceId` ON `${TABLE_NAME}` (`sourceId`)"
+          },
+          {
+            "name": "index_scan_generation_sourceId_status",
+            "unique": false,
+            "columnNames": [
+              "sourceId",
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_scan_generation_sourceId_status` ON `${TABLE_NAME}` (`sourceId`, `status`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "source",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "sourceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "materialized_order_header",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `scopeId` TEXT NOT NULL, `sortField` TEXT NOT NULL, `sortDirection` TEXT NOT NULL, `generation` INTEGER NOT NULL, `rowCount` INTEGER NOT NULL, `isCurrent` INTEGER NOT NULL, `randomSeed` INTEGER, `algorithmVersion` TEXT, `generatedAtEpochMs` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scopeId",
+            "columnName": "scopeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortField",
+            "columnName": "sortField",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortDirection",
+            "columnName": "sortDirection",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "generation",
+            "columnName": "generation",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rowCount",
+            "columnName": "rowCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isCurrent",
+            "columnName": "isCurrent",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "randomSeed",
+            "columnName": "randomSeed",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "algorithmVersion",
+            "columnName": "algorithmVersion",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "generatedAtEpochMs",
+            "columnName": "generatedAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_materialized_order_header_scopeId_sortField_sortDirection_generation",
+            "unique": true,
+            "columnNames": [
+              "scopeId",
+              "sortField",
+              "sortDirection",
+              "generation"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_materialized_order_header_scopeId_sortField_sortDirection_generation` ON `${TABLE_NAME}` (`scopeId`, `sortField`, `sortDirection`, `generation`)"
+          },
+          {
+            "name": "index_materialized_order_header_scopeId_sortField_sortDirection_isCurrent",
+            "unique": false,
+            "columnNames": [
+              "scopeId",
+              "sortField",
+              "sortDirection",
+              "isCurrent"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_materialized_order_header_scopeId_sortField_sortDirection_isCurrent` ON `${TABLE_NAME}` (`scopeId`, `sortField`, `sortDirection`, `isCurrent`)"
+          }
+        ]
+      },
+      {
+        "tableName": "materialized_order_row",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`headerId` TEXT NOT NULL, `ordinal` INTEGER NOT NULL, `mediaId` TEXT NOT NULL, PRIMARY KEY(`headerId`, `ordinal`), FOREIGN KEY(`headerId`) REFERENCES `materialized_order_header`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "headerId",
+            "columnName": "headerId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mediaId",
+            "columnName": "mediaId",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "headerId",
+            "ordinal"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_materialized_order_row_headerId",
+            "unique": false,
+            "columnNames": [
+              "headerId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_materialized_order_row_headerId` ON `${TABLE_NAME}` (`headerId`)"
+          },
+          {
+            "name": "index_materialized_order_row_headerId_mediaId",
+            "unique": true,
+            "columnNames": [
+              "headerId",
+              "mediaId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_materialized_order_row_headerId_mediaId` ON `${TABLE_NAME}` (`headerId`, `mediaId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "materialized_order_header",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "headerId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1cfdc2336da1d9b26f89e9d20c7a4153')"
+    ]
+  }
+}

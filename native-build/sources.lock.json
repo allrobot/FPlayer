@@ -1,0 +1,608 @@
+{
+  "schema_version": 1,
+  "lock_id": "fplayer-native-arm64-gpl-v1",
+  "reviewed_on": "2026-08-09",
+  "policy": {
+    "application_license": "GPL-3.0-or-later",
+    "native_license_mode": "GPL-3.0-or-later",
+    "allow_nonfree": false,
+    "source_acquisition": "network-from-locked-origin",
+    "reference_checkouts_are_build_inputs": false
+  },
+  "target": {
+    "abis": [
+      "arm64-v8a"
+    ],
+    "android_api": 26,
+    "ndk_package": "ndk;29.0.14206865",
+    "ndk_release": "r29",
+    "meson_version": "1.11.2",
+    "ndk_repository": "https://android.googlesource.com/platform/ndk",
+    "ndk_commit": "5199c56421d79df5099aad8e32e32c101ff85cca",
+    "ndk_package_notice_files": [
+      "NOTICE",
+      "NOTICE.toolchain"
+    ],
+    "c_triple": "aarch64-linux-android",
+    "compiler_triple": "aarch64-linux-android26",
+    "link_flags": [
+      "-Wl,-O1,--icf=safe",
+      "-Wl,-z,max-page-size=16384"
+    ],
+    "meson_defaults": [
+      "--buildtype=release",
+      "--default-library=static",
+      "--wrap-mode=nodownload"
+    ]
+  },
+  "sources": [
+    {
+      "id": "android-ndk",
+      "kind": "git",
+      "role": "toolchain-runtime",
+      "url": "https://android.googlesource.com/platform/ndk",
+      "revision": "5199c56421d79df5099aad8e32e32c101ff85cca",
+      "version_hint": "r29-package-29.0.14206865",
+      "license_expression": "Apache-2.0 WITH LLVM-exception AND LicenseRef-Android-NDK-Notices",
+      "notice_files": [
+        "NOTICE"
+      ]
+    },
+    {
+      "id": "mpv-android-reference",
+      "kind": "git",
+      "role": "reference-only",
+      "url": "https://github.com/mpv-android/mpv-android",
+      "revision": "b44d3addc2a6bfb140a862308955a836e4a922d2",
+      "version_hint": "2026-04-25-26-gb44d3ad",
+      "license_expression": "MIT",
+      "notice_files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "id": "mpv",
+      "kind": "git",
+      "role": "runtime-shared",
+      "url": "https://github.com/mpv-player/mpv.git",
+      "revision": "dd5d17d3285a095a0f712fa9d116e22a076492de",
+      "version_hint": "git-release-201-gdd5d17d328",
+      "license_expression": "GPL-2.0-or-later",
+      "selected_license": "GPL-3.0-or-later",
+      "notice_files": [
+        "Copyright",
+        "LICENSE.GPL"
+      ]
+    },
+    {
+      "id": "ffmpeg",
+      "kind": "git",
+      "role": "runtime-shared",
+      "url": "https://github.com/FFmpeg/FFmpeg.git",
+      "revision": "f944afd04097178b7e3c0d6c7f4e524a9e8f6063",
+      "version_hint": "n8.2-dev-2721-gf944afd040",
+      "license_expression": "GPL-3.0-or-later",
+      "selected_license": "GPL-3.0-or-later-via-enable-gpl-and-enable-version3",
+      "notice_files": [
+        "LICENSE.md",
+        "COPYING.GPLv3",
+        "COPYING.LGPLv2.1",
+        "COPYING.LGPLv3"
+      ]
+    },
+    {
+      "id": "dav1d",
+      "kind": "git",
+      "role": "runtime-static",
+      "url": "https://code.videolan.org/videolan/dav1d.git",
+      "revision": "54706fc6bc0cdecab7e9593974a4039cc038fca7",
+      "version_hint": "1.5.4",
+      "license_expression": "BSD-2-Clause",
+      "notice_files": [
+        "COPYING"
+      ]
+    },
+    {
+      "id": "libass",
+      "kind": "git",
+      "role": "runtime-static",
+      "url": "https://github.com/libass/libass",
+      "revision": "89cc0f4e450d64f74281a17d7f11ed05229665e8",
+      "version_hint": "0.17.5-3-g89cc0f4",
+      "license_expression": "ISC",
+      "notice_files": [
+        "COPYING"
+      ]
+    },
+    {
+      "id": "libplacebo",
+      "kind": "git",
+      "role": "runtime-static",
+      "url": "https://github.com/haasn/libplacebo",
+      "revision": "4d82c6898551068d4ae6a6b5538efcddc2c7cf64",
+      "version_hint": "v7.360.0-109-g4d82c689",
+      "license_expression": "LGPL-2.1-or-later",
+      "notice_files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "id": "freetype",
+      "kind": "git",
+      "role": "runtime-static",
+      "url": "https://gitlab.freedesktop.org/freetype/freetype.git",
+      "revision": "0a0221a1347e2f1e07c395263540026e9a0aa7c7",
+      "version_hint": "VER-2-14-3",
+      "license_expression": "FTL OR GPL-2.0-or-later",
+      "selected_license": "GPL-2.0-or-later",
+      "notice_files": [
+        "LICENSE.TXT",
+        "docs/GPLv2.TXT"
+      ]
+    },
+    {
+      "id": "fast-float",
+      "kind": "git-submodule",
+      "role": "runtime-header",
+      "parent": "libplacebo",
+      "path": "3rdparty/fast_float",
+      "url": "https://github.com/fastfloat/fast_float.git",
+      "revision": "97b54ca9e75f5303507699d27c6b4f4efe4641a1",
+      "license_expression": "MIT OR Apache-2.0 OR BSL-1.0",
+      "selected_license": "MIT",
+      "notice_files": [
+        "LICENSE-MIT"
+      ]
+    },
+    {
+      "id": "glad",
+      "kind": "git-submodule",
+      "role": "generated-runtime-source",
+      "parent": "libplacebo",
+      "path": "3rdparty/glad",
+      "url": "https://github.com/Dav1dde/glad",
+      "revision": "73db193f853e2ee079bf3ca8a64aa2eaf6459043",
+      "license_expression": "MIT AND Apache-2.0",
+      "notice_files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "id": "jinja",
+      "kind": "git-submodule",
+      "role": "build-only",
+      "parent": "libplacebo",
+      "path": "3rdparty/jinja",
+      "url": "https://github.com/pallets/jinja",
+      "revision": "15206881c006c79667fe5154fe80c01c65410679",
+      "license_expression": "BSD-3-Clause",
+      "notice_files": [
+        "LICENSE.txt"
+      ]
+    },
+    {
+      "id": "markupsafe",
+      "kind": "git-submodule",
+      "role": "build-only",
+      "parent": "libplacebo",
+      "path": "3rdparty/markupsafe",
+      "url": "https://github.com/pallets/markupsafe",
+      "revision": "297fc8e356e6836a62087949245d09a28e9f1b13",
+      "license_expression": "BSD-3-Clause",
+      "notice_files": [
+        "LICENSE.txt"
+      ]
+    },
+    {
+      "id": "mbedtls",
+      "kind": "archive",
+      "role": "runtime-static",
+      "url": "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.7/mbedtls-3.6.7.tar.bz2",
+      "version_hint": "3.6.7",
+      "sha256": "a7e8bcbec0e6f761b4af24f25677626b35f762f68eef79c08677a363212d11f6",
+      "license_expression": "Apache-2.0 OR GPL-2.0-or-later",
+      "selected_license": "Apache-2.0",
+      "notice_files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "id": "fribidi",
+      "kind": "archive",
+      "role": "runtime-static",
+      "url": "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz",
+      "version_hint": "1.0.16",
+      "sha256": "1b1cde5b235d40479e91be2f0e88a309e3214c8ab470ec8a2744d82a5a9ea05c",
+      "license_expression": "LGPL-2.1-or-later",
+      "notice_files": [
+        "COPYING"
+      ]
+    },
+    {
+      "id": "harfbuzz",
+      "kind": "archive",
+      "role": "runtime-static",
+      "url": "https://github.com/harfbuzz/harfbuzz/releases/download/14.2.1/harfbuzz-14.2.1.tar.xz",
+      "version_hint": "14.2.1",
+      "sha256": "a54a5d8e9380a41fbb762ce367bcbf7704792dfca0d93f1bbca86c5a57902e0e",
+      "license_expression": "MIT",
+      "notice_files": [
+        "COPYING"
+      ]
+    },
+    {
+      "id": "libunibreak",
+      "kind": "archive",
+      "role": "runtime-static",
+      "url": "https://github.com/adah1972/libunibreak/releases/download/libunibreak_7_0/libunibreak-7.0.tar.gz",
+      "version_hint": "7.0",
+      "sha256": "8c9a6e121736cd0d5c890ae3ae96f3f4010a19aa040f1dbded833a62a87717d3",
+      "license_expression": "Zlib",
+      "notice_files": [
+        "LICENCE"
+      ]
+    },
+    {
+      "id": "libxml2",
+      "kind": "archive",
+      "role": "runtime-static",
+      "url": "https://gitlab.gnome.org/GNOME/libxml2/-/archive/v2.15.3/libxml2-v2.15.3.tar.gz",
+      "version_hint": "2.15.3",
+      "sha256": "0da50c1415f4ec0364569d2119b1436ba837b31df44af28569d234272c23cf1f",
+      "license_expression": "MIT",
+      "notice_files": [
+        "Copyright"
+      ]
+    },
+    {
+      "id": "fontconfig",
+      "kind": "archive",
+      "role": "runtime-static",
+      "url": "https://gitlab.freedesktop.org/fontconfig/fontconfig/-/archive/2.18.2/fontconfig-2.18.2.tar.gz",
+      "version_hint": "2.18.2",
+      "sha256": "a84d41b57cfb015783d7973b398c26d8763a64b803f97f31fa126fd2aa5eaaca",
+      "license_expression": "MIT",
+      "notice_files": [
+        "COPYING"
+      ]
+    },
+    {
+      "id": "lua",
+      "kind": "archive",
+      "role": "runtime-static",
+      "url": "https://www.lua.org/ftp/lua-5.2.4.tar.gz",
+      "version_hint": "5.2.4",
+      "sha256": "b9e2e4aad6789b3b63a056d442f7b39f0ecfca3ae0f1fc0ae4e9614401b69f4b",
+      "license_expression": "MIT",
+      "notice_files": [
+        "doc/readme.html"
+      ]
+    },
+    {
+      "id": "curl",
+      "kind": "archive",
+      "role": "runtime-static",
+      "url": "https://curl.se/download/curl-8.21.0.tar.gz",
+      "version_hint": "8.21.0",
+      "sha256": "d9b327997999045a24cda50f3983e69e51c516bd8be6ef9842fc7f99135e33bb",
+      "license_expression": "curl",
+      "notice_files": [
+        "COPYING"
+      ]
+    }
+  ],
+  "builds": [
+    {
+      "id": "mbedtls",
+      "source_ids": [
+        "mbedtls"
+      ],
+      "linkage": "static-into-ffmpeg-and-curl",
+      "options": [
+        "make no_test",
+        "MBEDTLS_AESNI_C=toolchain-detected"
+      ]
+    },
+    {
+      "id": "dav1d",
+      "source_ids": [
+        "dav1d"
+      ],
+      "linkage": "static-into-ffmpeg",
+      "options": [
+        "-Denable_tests=false",
+        "-Denable_tools=false",
+        "-Db_lto=true",
+        "-Dstack_alignment=16"
+      ]
+    },
+    {
+      "id": "freetype",
+      "source_ids": [
+        "freetype"
+      ],
+      "linkage": "static-into-libass",
+      "options": [
+        "-Dtests=disabled",
+        "-Dbrotli=disabled",
+        "-Dbzip2=disabled",
+        "-Dpng=disabled",
+        "-Dzlib=disabled",
+        "-Dharfbuzz=disabled"
+      ]
+    },
+    {
+      "id": "fribidi",
+      "source_ids": [
+        "fribidi"
+      ],
+      "linkage": "static-into-libass",
+      "options": [
+        "-Dtests=false",
+        "-Ddocs=false"
+      ]
+    },
+    {
+      "id": "harfbuzz",
+      "source_ids": [
+        "harfbuzz"
+      ],
+      "linkage": "static-into-libass",
+      "options": [
+        "-Dtests=disabled",
+        "-Ddocs=disabled",
+        "-Draster=disabled",
+        "-Dvector=disabled",
+        "-Dgpu=disabled",
+        "-Dsubset=disabled"
+      ]
+    },
+    {
+      "id": "libunibreak",
+      "source_ids": [
+        "libunibreak"
+      ],
+      "linkage": "static-into-libass",
+      "options": [
+        "--with-pic",
+        "--enable-static",
+        "--disable-shared"
+      ]
+    },
+    {
+      "id": "libxml2",
+      "source_ids": [
+        "libxml2"
+      ],
+      "linkage": "static-into-ffmpeg-and-fontconfig",
+      "options": [
+        "-Dminimum=true",
+        "-Dpush=enabled",
+        "-Dreader=enabled",
+        "-Dsax1=enabled",
+        "-Diso8859x=enabled",
+        "-Dpattern=enabled"
+      ]
+    },
+    {
+      "id": "fontconfig",
+      "source_ids": [
+        "fontconfig",
+        "libxml2",
+        "freetype"
+      ],
+      "linkage": "static-into-libass",
+      "options": [
+        "-Dtests=disabled",
+        "-Ddoc=disabled",
+        "-Dtools=disabled",
+        "-Dnls=disabled",
+        "-Dxml-backend=libxml2"
+      ]
+    },
+    {
+      "id": "libplacebo",
+      "source_ids": [
+        "libplacebo",
+        "fast-float",
+        "glad",
+        "jinja",
+        "markupsafe"
+      ],
+      "linkage": "static-into-libmpv",
+      "options": [
+        "-Dvulkan=disabled",
+        "-Dopengl=enabled",
+        "-Dgl-proc-addr=enabled",
+        "-Ddemos=false",
+        "-Dtests=false",
+        "-Dbench=false",
+        "-Dfuzz=false",
+        "-Dshaderc=disabled",
+        "-Dglslang=disabled",
+        "-Dlcms=disabled",
+        "-Ddovi=disabled",
+        "-Dlibdovi=disabled",
+        "-Dxxhash=disabled",
+        "-Dunwind=disabled"
+      ]
+    },
+    {
+      "id": "ffmpeg",
+      "source_ids": [
+        "ffmpeg",
+        "mbedtls",
+        "dav1d",
+        "libxml2"
+      ],
+      "linkage": "shared",
+      "options": [
+        "--target-os=android",
+        "--enable-cross-compile",
+        "--arch=aarch64",
+        "--cpu=armv8-a",
+        "--enable-jni",
+        "--enable-mediacodec",
+        "--enable-mbedtls",
+        "--enable-libdav1d",
+        "--enable-libxml2",
+        "--disable-vulkan",
+        "--disable-static",
+        "--enable-shared",
+        "--enable-gpl",
+        "--enable-version3",
+        "--disable-debug",
+        "--disable-stripping",
+        "--disable-doc",
+        "--disable-programs",
+        "--disable-muxers",
+        "--disable-encoders",
+        "--disable-devices",
+        "--enable-encoder=mjpeg,png",
+        "--enable-muxer=mov,matroska,mpegts"
+      ],
+      "forbidden_options": [
+        "--enable-nonfree",
+        "--enable-openssl",
+        "--enable-libfdk-aac"
+      ]
+    },
+    {
+      "id": "libass",
+      "source_ids": [
+        "libass",
+        "freetype",
+        "fontconfig",
+        "fribidi",
+        "harfbuzz",
+        "libunibreak",
+        "libxml2"
+      ],
+      "linkage": "static-into-libmpv",
+      "options": [
+        "--with-pic",
+        "--enable-static",
+        "--disable-shared",
+        "--enable-libunibreak",
+        "--enable-fontconfig"
+      ]
+    },
+    {
+      "id": "curl",
+      "source_ids": [
+        "curl",
+        "mbedtls"
+      ],
+      "linkage": "static-into-libmpv",
+      "options": [
+        "--with-mbedtls",
+        "--without-libpsl",
+        "--disable-shared",
+        "--enable-static",
+        "--disable-debug",
+        "--disable-manual",
+        "--disable-docs",
+        "--disable-ares",
+        "--disable-unix-sockets",
+        "--disable-tls-srp",
+        "--disable-doh",
+        "--disable-rtsp",
+        "--disable-dict",
+        "--disable-telnet",
+        "--disable-tftp",
+        "--disable-pop3",
+        "--disable-imap",
+        "--disable-smb",
+        "--disable-smtp",
+        "--disable-gopher",
+        "--disable-mqtt",
+        "--disable-ntlm"
+      ]
+    },
+    {
+      "id": "lua",
+      "source_ids": [
+        "lua"
+      ],
+      "linkage": "static-into-libmpv",
+      "options": [
+        "-fPIC",
+        "-Dgetlocaledecpoint()=(46)",
+        "-Dlua_fseek",
+        "PLAT=linux",
+        "LUA_T=",
+        "LUAC_T="
+      ]
+    },
+    {
+      "id": "mpv",
+      "source_ids": [
+        "mpv",
+        "ffmpeg",
+        "libass",
+        "libplacebo",
+        "lua",
+        "curl"
+      ],
+      "linkage": "shared",
+      "options": [
+        "--default-library=shared",
+        "--wrap-mode=nodownload",
+        "-Dgpl=true",
+        "-Diconv=disabled",
+        "-Dlua=enabled",
+        "-Dlibcurl=enabled",
+        "-Dlibmpv=true",
+        "-Dcplayer=false",
+        "-Dmanpage-build=disabled",
+        "-Dvulkan=disabled",
+        "-Dplain-gl=enabled",
+        "-Dandroid-media-ndk=enabled",
+        "-Dtests=false"
+      ]
+    }
+  ],
+  "expected_artifacts": {
+    "apk_shared_libraries": [
+      "libmpv.so",
+      "libavcodec.so",
+      "libavfilter.so",
+      "libavformat.so",
+      "libavdevice.so",
+      "libavutil.so",
+      "libswresample.so",
+      "libswscale.so",
+      "libc++_shared.so"
+    ],
+    "allowed_android_system_libraries": [
+      "libandroid.so",
+      "libc.so",
+      "libdl.so",
+      "libEGL.so",
+      "libGLESv2.so",
+      "liblog.so",
+      "libm.so",
+      "libmediandk.so",
+      "libOpenSLES.so",
+      "libz.so"
+    ],
+    "adapter_stage_shared_libraries": [
+      "libplayer.so"
+    ],
+    "headers": [
+      "mpv/client.h",
+      "mpv/render.h",
+      "mpv/render_gl.h",
+      "mpv/stream_cb.h"
+    ],
+    "required_build_evidence": [
+      "source-manifest.json",
+      "toolchain-manifest.json",
+      "build-options.json",
+      "elf-dependencies.json",
+      "checksums.sha256",
+      "reproducibility.sha256",
+      "licenses/"
+    ]
+  }
+}

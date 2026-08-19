@@ -1,0 +1,38 @@
+# Android and Gradle
+.gradle/
+**/build/
+local.properties
+*.iml
+.idea/
+.superpowers/
+
+# Native build output
+.cxx/
+native-build/*
+!native-build/sources.lock.json
+!native-build/verify-lock.py
+!native-build/prepare-inputs.py
+!native-build/collect-evidence.py
+!native-build/build-arm64.sh
+!native-build/verify-reproducible.sh
+native-build/out-*/
+native-build/work-*/
+native-build/cache/
+app/src/main/jniLibs/
+core/player-mpv/src/main/jniLibs/
+
+# Local credentials and test material
+*.keystore
+*.jks
+secrets.properties
+credentials.properties
+test-media/
+device-logs/
+
+# Operating systems and editors
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+*.tmp.*
+*.new
