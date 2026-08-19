@@ -191,6 +191,13 @@ public interface IndexDao {
             "ORDER BY CASE WHEN sc.axis IS NULL THEN 0 ELSE 1 END, sc.axis ASC, sc.locator ASC")
     List<IndexEntities.ScriptEntity> currentScriptsForMedia(String mediaId);
 
+    @Query("SELECT t.* FROM thumbnail t INNER JOIN source s ON s.id = t.sourceId " +
+            "WHERE t.sourceId = :sourceId AND t.mediaId = :mediaId " +
+            "AND t.scanGeneration = s.currentScanGeneration AND t.status = 'READY' " +
+            "ORDER BY t.generatedAtEpochMs DESC, t.id DESC LIMIT 1")
+    @Nullable
+    IndexEntities.ThumbnailEntity currentThumbnailForMedia(String sourceId, String mediaId);
+
     @Query("SELECT t.cacheKey FROM thumbnail t INNER JOIN source s ON s.id = t.sourceId " +
             "WHERE t.sourceId = :sourceId AND t.scanGeneration = s.currentScanGeneration " +
             "AND t.status = 'READY'")

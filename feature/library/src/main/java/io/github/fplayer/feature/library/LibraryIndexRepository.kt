@@ -48,6 +48,7 @@ class LibraryIndexRepository(private val dao: IndexDao) {
                     liked = playback?.liked ?: false,
                     favorite = playback?.favorite ?: false,
                     disliked = playback?.disliked ?: false,
+                    thumbnailKey = dao.currentThumbnailForMedia(item.sourceId, item.id)?.cacheKey,
                 )
             }
         }

@@ -32,6 +32,8 @@ class PlaybackProgressBinding(
     fun onSeekConfirmed(token: Long, positionMs: Long): Boolean =
         interaction.onSeekConfirmed(token, positionMs)
 
+    fun onSeekFailed(token: Long): Boolean = interaction.onSeekFailed(token)
+
     fun consumeHapticEdge(): ProgressHapticEdge = interaction.consumeHapticEdge()
 
     fun snapshot(): ProgressInteractionSnapshot = interaction.snapshot()

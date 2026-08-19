@@ -48,7 +48,7 @@ fun LibraryGridScreen(
     onJumpConsumed: () -> Unit,
     onJumpToJustWatched: () -> Unit,
     thumbnailKey: (LibraryGridItem) -> String? = { null },
-    thumbnailLoader: (String) -> LibraryThumbnailState = { LibraryThumbnailState.Error },
+    thumbnailLoader: suspend (String) -> LibraryThumbnailState = { LibraryThumbnailState.Error },
     modifier: Modifier = Modifier,
 ) {
     require(adaptiveGridColumns >= 3)
@@ -183,7 +183,7 @@ private fun MediaGridTile(
     isCurrentOrJustWatched: Boolean,
     showMetadata: Boolean,
     thumbnailKey: String?,
-    thumbnailLoader: (String) -> LibraryThumbnailState,
+    thumbnailLoader: suspend (String) -> LibraryThumbnailState,
     onClick: () -> Unit,
 ) {
     Column(

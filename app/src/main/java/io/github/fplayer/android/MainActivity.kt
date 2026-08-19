@@ -9,6 +9,9 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
 import android.graphics.BitmapFactory
+import android.view.Surface
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -26,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.ArrowBack
@@ -58,6 +62,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.setValue
@@ -93,6 +98,7 @@ import io.github.fplayer.feature.feed.PlaybackProgressBinding
 import io.github.fplayer.feature.feed.ProgressHeatmapRenderer
 import io.github.fplayer.feature.feed.ProgressInteractionSnapshot
 import io.github.fplayer.feature.feed.ProgressInteractionMode
+import io.github.fplayer.core.script.ScriptHeatmap
 import io.github.fplayer.feature.feed.LongPressPlaybackSettingsStateMachine
 import io.github.fplayer.feature.library.HomeSurface
 import io.github.fplayer.feature.library.LibraryContentFilter
@@ -112,10 +118,10 @@ import io.github.fplayer.feature.settings.ScriptPlaybackSettingsSurface
 import io.github.fplayer.feature.settings.reduce
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.delay
 
 open class MainActivity : ComponentActivity() {
     private var playbackBinder: PlaybackService.LocalBinder? = null
+    private var playbackConnectionVersion by mutableIntStateOf(0)
     private var serviceBindingRequested = false
     private var pendingBackgroundPlaybackBinder: PlaybackService.LocalBinder? = null
     private val notificationPermissionLauncher = registerForActivityResult(
@@ -129,12 +135,14 @@ open class MainActivity : ComponentActivity() {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             if (!serviceBindingRequested) return
             playbackBinder = service as? PlaybackService.LocalBinder
+            playbackConnectionVersion += 1
             playbackBinder?.setActivityVisible(true)
             playbackBinder?.let(::onPlaybackBinderConnected)
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             playbackBinder = null
+            playbackConnectionVersion += 1
         }
     }
 
@@ -145,8 +153,18 @@ open class MainActivity : ComponentActivity() {
             MaterialTheme(colorScheme = FPlayerColors) {
                 FPlayerApp(
                     onSelectMedia = { mediaId -> playbackBinder?.selectMedia(mediaId) },
-                    playbackDiagnostics = { playbackBinder?.diagnostics() },
-                    onSeekRequested = { positionMs -> playbackBinder?.seekTo(positionMs) },
+                    onPlaybackToggle = {
+                        val diagnostics = playbackBinder?.diagnostics()
+                        if (diagnostics?.isPlaying == true) playbackBinder?.pause() else playbackBinder?.play()
+                    },
+                    observePlayback = { observer -> playbackBinder?.setPlaybackObserver(observer) },
+                    onSeekRequested = { positionMs, token, callback ->
+                        playbackBinder?.seekTo(positionMs, token, callback)
+                            ?: callback(PlaybackService.SeekConfirmation(token, null, false, "SERVICE_UNAVAILABLE"))
+                    },
+                    onSurfaceAvailable = { surface -> playbackBinder?.attachSurface(surface) == true },
+                    onSurfaceDestroyed = { playbackBinder?.detachSurface() },
+                    serviceEpoch = playbackConnectionVersion,
                 )
             }
         }
@@ -162,11 +180,13 @@ open class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         playbackBinder?.setActivityVisible(false)
+        playbackBinder?.setPlaybackObserver(null)
         if (serviceBindingRequested) {
             unbindService(serviceConnection)
             serviceBindingRequested = false
         }
         playbackBinder = null
+        playbackConnectionVersion += 1
         super.onStop()
     }
 
@@ -194,18 +214,29 @@ private enum class AppDestination(val label: String) {
 @Composable
 private fun FPlayerApp(
     onSelectMedia: (io.github.fplayer.core.model.MediaId) -> Unit,
-    playbackDiagnostics: () -> PlaybackService.Diagnostics?,
-    onSeekRequested: (Long) -> Unit,
+    onPlaybackToggle: () -> Unit,
+    observePlayback: (((PlaybackService.Diagnostics) -> Unit)?) -> Unit,
+    onSeekRequested: (Long, Long, (PlaybackService.SeekConfirmation) -> Unit) -> Unit,
+    onSurfaceAvailable: (Surface) -> Boolean,
+    onSurfaceDestroyed: () -> Unit,
+    serviceEpoch: Int,
 ) {
-    val thumbnailLoader: (String) -> LibraryThumbnailState = remember {
-        { key ->
-            val bitmap = BitmapFactory.decodeFile(key)?.asImageBitmap()
-            if (bitmap == null) LibraryThumbnailState.Error else LibraryThumbnailState.Ready(bitmap)
+    val context = LocalContext.current
+    val thumbnailLoader: suspend (String) -> LibraryThumbnailState = remember(context) {
+        {
+            key -> withContext(Dispatchers.IO) {
+                if (!key.matches(Regex("[0-9a-f]{64}"))) {
+                    LibraryThumbnailState.Error
+                } else {
+                    val file = context.cacheDir.resolve("thumbnails").resolve("$key.thumb")
+                    val bitmap = BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
+                    if (bitmap == null) LibraryThumbnailState.Error else LibraryThumbnailState.Ready(bitmap)
+                }
+            }
         }
     }
     var destinationName by rememberSaveable { mutableStateOf(AppDestination.HOME.name) }
     val destination = AppDestination.valueOf(destinationName)
-    val context = LocalContext.current
     val indexDatabase = remember { FPlayerIndexDatabase.open(context) }
     DisposableEffect(indexDatabase) {
         onDispose { indexDatabase.close() }
@@ -215,6 +246,11 @@ private fun FPlayerApp(
     var catalogDrawerSignal by rememberSaveable { mutableStateOf(0) }
     var catalogSearchSignal by rememberSaveable { mutableStateOf(0) }
     fun refreshCatalog() { catalogSnapshot = catalogState.snapshot() }
+    fun selectMedia(mediaId: io.github.fplayer.core.model.MediaId) {
+        catalogState.selectMedia(mediaId)
+        refreshCatalog()
+        onSelectMedia(mediaId)
+    }
     LaunchedEffect(indexDatabase) {
         val input = withContext(Dispatchers.IO) {
             LibraryIndexRepository(indexDatabase.indexDao()).load()
@@ -241,9 +277,44 @@ private fun FPlayerApp(
     }
     fun refreshLibrary() { librarySnapshot = libraryState.snapshot() }
     fun openCurrentGrid() {
-        libraryJumpTarget = libraryState.openGridFromFeed(librarySnapshot.currentMediaId)
+        catalogSnapshot.media.firstOrNull { it.mediaId == catalogSnapshot.currentMediaId }?.let { media ->
+            catalogState.openFolder(media.folderId)
+            refreshCatalog()
+        }
+        libraryJumpTarget = libraryState.openGridFromFeed(catalogState.snapshot().currentMediaId)
         refreshLibrary()
         destinationName = AppDestination.HOME.name
+    }
+    LaunchedEffect(catalogSnapshot) {
+        val folder = catalogSnapshot.selectedFolder ?: catalogSnapshot.folders.firstOrNull()
+        if (folder != null) {
+            libraryState.replace(
+                LibraryFolderHeader(
+                    id = folder.id,
+                    displayName = folder.displayName,
+                    path = folder.path,
+                    directMediaCount = folder.directMediaCount,
+                    descendantMediaCount = folder.descendantMediaCount,
+                ),
+                catalogSnapshot.media
+                    .filter { it.folderId == folder.id }
+                    .map { media ->
+                        io.github.fplayer.feature.library.LibraryGridItem(
+                            mediaId = media.mediaId,
+                            title = media.title,
+                            folderName = media.folderName,
+                            durationMs = media.durationMs,
+                            progressPermille = media.progressPermille,
+                            hasScript = media.hasScript,
+                            thumbnailKey = media.thumbnailKey,
+                        )
+                    },
+            )
+            if (libraryState.snapshot().homeSurface == HomeSurface.FOLDER_GRID) {
+                libraryJumpTarget = libraryState.openGridFromFeed(catalogSnapshot.currentMediaId)
+            }
+            refreshLibrary()
+        }
     }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -296,13 +367,14 @@ private fun FPlayerApp(
                     },
                     onOpenMedia = { item ->
                         libraryState.openPlayback(item.mediaId)
+                        selectMedia(item.mediaId)
                         refreshLibrary()
                     },
                     onJumpConsumed = { libraryJumpTarget = null },
                     onJumpToJustWatched = {
                         libraryJumpTarget = libraryState.jumpToJustWatched()
                     },
-                    thumbnailKey = { null },
+                    thumbnailKey = { item -> item.thumbnailKey },
                     thumbnailLoader = thumbnailLoader,
                     modifier = Modifier.padding(contentPadding),
                 )
@@ -330,8 +402,13 @@ private fun FPlayerApp(
                         catalogSearchSignal += 1
                         destinationName = AppDestination.LIBRARY.name
                     },
-                    playbackDiagnostics = playbackDiagnostics,
+                    onSelectMedia = onSelectMedia,
+                    onPlaybackToggle = onPlaybackToggle,
+                    observePlayback = observePlayback,
                     onSeekRequested = onSeekRequested,
+                    onSurfaceAvailable = onSurfaceAvailable,
+                    onSurfaceDestroyed = onSurfaceDestroyed,
+                    serviceEpoch = serviceEpoch,
                 )
             }
             AppDestination.LIBRARY -> LibraryCatalogScreen(
@@ -347,8 +424,7 @@ private fun FPlayerApp(
                 onOpenFolder = { folder -> catalogState.openFolder(folder.id); refreshCatalog() },
                 onCloseFolder = { catalogState.closeFolder(); refreshCatalog() },
                 onOpenMedia = { item ->
-                    catalogState.selectMedia(item.mediaId)
-                    onSelectMedia(item.mediaId)
+                    selectMedia(item.mediaId)
                     refreshCatalog()
                     destinationName = AppDestination.HOME.name
                 },
@@ -363,7 +439,7 @@ private fun FPlayerApp(
                 },
                 openDrawerSignal = catalogDrawerSignal,
                 openSearchSignal = catalogSearchSignal,
-                thumbnailKey = { media -> media.path },
+                thumbnailKey = { media -> media.thumbnailKey },
                 thumbnailLoader = thumbnailLoader,
                 modifier = Modifier.padding(contentPadding),
             )
@@ -392,40 +468,59 @@ private fun PlaybackFeedScreen(
     onOpenGrid: () -> Unit,
     onOpenDrawer: () -> Unit,
     onOpenSearch: () -> Unit,
-    playbackDiagnostics: () -> PlaybackService.Diagnostics?,
-    onSeekRequested: (Long) -> Unit,
+    onSelectMedia: (io.github.fplayer.core.model.MediaId) -> Unit,
+    onPlaybackToggle: () -> Unit,
+    observePlayback: (((PlaybackService.Diagnostics) -> Unit)?) -> Unit,
+    onSeekRequested: (Long, Long, (PlaybackService.SeekConfirmation) -> Unit) -> Unit,
+    onSurfaceAvailable: (Surface) -> Boolean,
+    onSurfaceDestroyed: () -> Unit,
+    serviceEpoch: Int,
 ) {
     var overlay by rememberSaveable(stateSaver = PlaybackOverlaySaver) { mutableStateOf(PlaybackOverlayState()) }
     var feedState by remember { mutableStateOf(PlaybackFeedState()) }
     val feedReducer = remember { PlaybackFeedReducer(pageExtentPx = 1_000f) }
     val overlayLayout = remember { PlaybackOverlayLayout() }
     var pendingSeekConfirmation by remember { mutableStateOf<Pair<Long, Long>?>(null) }
-    val progressBinding = remember {
-        PlaybackProgressBinding(durationMs = 0) { positionMs, token ->
-            onSeekRequested(positionMs)
-            pendingSeekConfirmation = token to positionMs
-        }
+    var progressSnapshot by remember {
+        mutableStateOf(io.github.fplayer.feature.feed.ProgressInteractionStateMachine(0).snapshot())
     }
-    var progressSnapshot by remember { mutableStateOf(progressBinding.snapshot()) }
+    val progressBinding = remember {
+        lateinit var created: PlaybackProgressBinding
+        created = PlaybackProgressBinding(durationMs = 0) { positionMs, token ->
+            pendingSeekConfirmation = token to positionMs
+            onSeekRequested(positionMs, token) { confirmation ->
+                if (confirmation.accepted && confirmation.positionMs != null &&
+                    created.onSeekConfirmed(confirmation.token, confirmation.positionMs)
+                ) {
+                    pendingSeekConfirmation = null
+                    progressSnapshot = created.snapshot()
+                } else if (!confirmation.accepted && confirmation.token == token) {
+                    created.onSeekFailed(confirmation.token)
+                    pendingSeekConfirmation = null
+                    progressSnapshot = created.snapshot()
+                }
+            }
+        }
+        created
+    }
+    var heatmap by remember { mutableStateOf<ScriptHeatmap?>(null) }
+    LaunchedEffect(serviceEpoch, feedItems, feedState.activeIndex) {
+        feedState.activeIndex?.let(feedItems::getOrNull)?.let { onSelectMedia(it.media.id) }
+    }
     LaunchedEffect(feedItems) {
         feedState = feedReducer.reduce(feedState, FeedPagingEvent.ReplaceItems(feedItems))
     }
-    LaunchedEffect(playbackDiagnostics) {
-        while (true) {
-            playbackDiagnostics()?.let { diagnostics ->
-                progressBinding.updateMediaClock(
-                    positionMs = diagnostics.positionMs,
-                    durationMs = diagnostics.durationMs ?: 0L,
-                )
-                pendingSeekConfirmation?.let { (token, positionMs) ->
-                    if (progressBinding.onSeekConfirmed(token, positionMs)) {
-                        pendingSeekConfirmation = null
-                    }
-                }
-                progressSnapshot = progressBinding.snapshot()
-            }
-            delay(250L)
+    DisposableEffect(serviceEpoch, observePlayback) {
+        observePlayback { diagnostics ->
+            progressBinding.updateMediaClock(
+                positionMs = diagnostics.positionMs,
+                durationMs = diagnostics.durationMs ?: 0L,
+            )
+            progressSnapshot = progressBinding.snapshot()
+            heatmap = diagnostics.scriptHeatmap
+            overlay = overlay.copy(isPlaying = diagnostics.isPlaying)
         }
+        onDispose { observePlayback(null) }
     }
     val context = LocalContext.current
     val playbackSettingsState = remember { LongPressPlaybackSettingsStateMachine() }
@@ -439,22 +534,32 @@ private fun PlaybackFeedScreen(
         overlay = PlaybackOverlayReducer.reduce(overlay, action)
     }
     Box(
-        modifier = modifier.fillMaxSize().background(Color.Black).pointerInput(onOpenGrid) {
+        modifier = modifier.fillMaxSize().background(Color.Black).pointerInput(onOpenGrid, progressSnapshot.feedPagingBlocked) {
             var dx = 0f
             var dy = 0f
+            var gestureBlocked = false
             detectDragGestures(
                 onDragStart = {
                     dx = 0f
                     dy = 0f
-                    feedState = feedReducer.reduce(feedState, FeedPagingEvent.Down)
+                    gestureBlocked = progressSnapshot.feedPagingBlocked
+                    if (!gestureBlocked) {
+                        feedState = feedReducer.reduce(feedState, FeedPagingEvent.Down)
+                    }
                 },
                 onDrag = { change, dragAmount ->
+                    if (gestureBlocked || progressSnapshot.feedPagingBlocked) {
+                        if (!gestureBlocked) feedState = feedReducer.reduce(feedState, FeedPagingEvent.Up())
+                        gestureBlocked = true
+                        return@detectDragGestures
+                    }
                     change.consume()
                     dx += dragAmount.x
                     dy += dragAmount.y
                     feedState = feedReducer.reduce(feedState, FeedPagingEvent.Move(dx, dy))
                 },
                 onDragEnd = {
+                    if (gestureBlocked || progressSnapshot.feedPagingBlocked) return@detectDragGestures
                     feedState = feedReducer.reduce(feedState, FeedPagingEvent.Up())
                     if (feedState.paging.outcome == io.github.fplayer.feature.feed.FeedPagingOutcome.OPEN_GRID) {
                         onOpenGrid()
@@ -463,6 +568,7 @@ private fun PlaybackFeedScreen(
                     }
                 },
                 onDragCancel = {
+                    if (gestureBlocked || progressSnapshot.feedPagingBlocked) return@detectDragGestures
                     feedState = feedReducer.reduce(feedState, FeedPagingEvent.Up())
                 },
             )
@@ -482,6 +588,12 @@ private fun PlaybackFeedScreen(
                 }
             }
         } else {
+            PlaybackSurface(
+                onSurfaceAvailable = onSurfaceAvailable,
+                onSurfaceDestroyed = onSurfaceDestroyed,
+                serviceEpoch = serviceEpoch,
+                modifier = Modifier.fillMaxSize(),
+            )
             val item = feedState.activeIndex?.let(feedItems::getOrNull)
             Column(
                 modifier = Modifier.align(Alignment.Center).padding(24.dp),
@@ -535,6 +647,7 @@ private fun PlaybackFeedScreen(
             OverlayIcon(Icons.Outlined.ArrowBack, "后退五秒") { dispatch(PlaybackOverlayAction.SeekBack) }
             OverlayIcon(if (overlay.isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow, if (overlay.isPlaying) "暂停" else "播放") {
                 dispatch(PlaybackOverlayAction.TogglePlayPause)
+                onPlaybackToggle()
             }
             TextButton(onClick = { dispatch(PlaybackOverlayAction.CycleSpeed) }) {
                 Text("${overlay.speed}x", color = Color.White)
@@ -542,6 +655,7 @@ private fun PlaybackFeedScreen(
         }
         PlaybackProgressSurface(
             snapshot = progressSnapshot,
+            heatmap = heatmap,
             interactionHeightDp = overlayLayout.controlTouchTargetDp,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -571,8 +685,43 @@ private fun PlaybackFeedScreen(
 }
 
 @Composable
+private fun PlaybackSurface(
+    onSurfaceAvailable: (Surface) -> Boolean,
+    onSurfaceDestroyed: () -> Unit,
+    serviceEpoch: Int,
+    modifier: Modifier = Modifier,
+) {
+    AndroidView(
+        modifier = modifier,
+        factory = { context ->
+            SurfaceView(context).also { view ->
+                view.holder.addCallback(object : SurfaceHolder.Callback {
+                    override fun surfaceCreated(holder: SurfaceHolder) {
+                        onSurfaceAvailable(holder.surface)
+                    }
+
+                    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+                        if (holder.surface.isValid) onSurfaceAvailable(holder.surface)
+                    }
+
+                    override fun surfaceDestroyed(holder: SurfaceHolder) {
+                        onSurfaceDestroyed()
+                    }
+                })
+            }
+        },
+        update = { view ->
+            if (serviceEpoch >= 0 && view.holder.surface.isValid) {
+                onSurfaceAvailable(view.holder.surface)
+            }
+        },
+    )
+}
+
+@Composable
 private fun PlaybackProgressSurface(
     snapshot: ProgressInteractionSnapshot,
+    heatmap: ScriptHeatmap?,
     interactionHeightDp: Int,
     modifier: Modifier = Modifier,
     onPointerDown: () -> Unit,
@@ -581,7 +730,7 @@ private fun PlaybackProgressSurface(
 ) {
     var widthPx by remember { mutableStateOf(1) }
     var pointerX by remember { mutableStateOf(0f) }
-    val renderModel = ProgressHeatmapRenderer.build(heatmap = null, snapshot = snapshot)
+    val renderModel = ProgressHeatmapRenderer.build(heatmap = heatmap, snapshot = snapshot)
     val primary = MaterialTheme.colorScheme.primary
     val previewSeconds = snapshot.previewPositionMs / 1_000
     val durationSeconds = snapshot.durationMs / 1_000
@@ -622,6 +771,17 @@ private fun PlaybackProgressSurface(
                 end = Offset(size.width * renderModel.progress, y),
                 strokeWidth = 4.dp.toPx(),
             )
+            renderModel.traces.forEach { trace ->
+                val traceColor = Color.White.copy(alpha = trace.luminance)
+                trace.points.zipWithNext().forEach { (from, to) ->
+                    drawLine(
+                        color = traceColor,
+                        start = Offset(size.width * from.x, size.height * from.y),
+                        end = Offset(size.width * to.x, size.height * to.y),
+                        strokeWidth = 2.dp.toPx(),
+                    )
+                }
+            }
         }
         Text(
             "$previewSeconds / $durationSeconds",

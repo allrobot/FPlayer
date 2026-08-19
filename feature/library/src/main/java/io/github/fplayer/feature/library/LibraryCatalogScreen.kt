@@ -87,7 +87,7 @@ fun LibraryCatalogScreen(
     openDrawerSignal: Int = 0,
     openSearchSignal: Int = 0,
     thumbnailKey: (LibraryCatalogMedia) -> String? = { null },
-    thumbnailLoader: (String) -> LibraryThumbnailState = { LibraryThumbnailState.Error },
+    thumbnailLoader: suspend (String) -> LibraryThumbnailState = { LibraryThumbnailState.Error },
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -235,7 +235,7 @@ private fun CatalogBody(
     onOpenMedia: (LibraryCatalogMedia) -> Unit,
     onRequestDelete: (MediaId) -> Unit,
     thumbnailKey: (LibraryCatalogMedia) -> String?,
-    thumbnailLoader: (String) -> LibraryThumbnailState,
+    thumbnailLoader: suspend (String) -> LibraryThumbnailState,
 ) {
     val showFolders = snapshot.collection == LibraryCollection.ALL && snapshot.albumView != LibraryAlbumView.ALL_VIDEOS
     if ((showFolders && snapshot.folders.isEmpty()) || (!showFolders && snapshot.media.isEmpty())) {
@@ -300,7 +300,7 @@ private fun CatalogMediaTile(
     current: Boolean,
     showMetadata: Boolean,
     thumbnailKey: String?,
-    thumbnailLoader: (String) -> LibraryThumbnailState,
+    thumbnailLoader: suspend (String) -> LibraryThumbnailState,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
 ) {

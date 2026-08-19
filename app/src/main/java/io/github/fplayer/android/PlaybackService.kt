@@ -14,6 +14,7 @@ import android.os.IBinder
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.view.Surface
 import io.github.fplayer.core.index.MaterializedOrder
 import io.github.fplayer.core.index.SortDirection
 import io.github.fplayer.core.index.SortField
@@ -25,6 +26,8 @@ import io.github.fplayer.feature.feed.CompletionDisposition
 import io.github.fplayer.feature.feed.FeedMedia
 import io.github.fplayer.feature.feed.FeedSlot
 import io.github.fplayer.feature.feed.PlaybackSession
+import io.github.fplayer.feature.feed.PlaybackSeekCoordinator
+import io.github.fplayer.feature.feed.SeekConfirmationResult
 import io.github.fplayer.feature.feed.SlotPlayer
 import io.github.fplayer.feature.feed.SlotPlayerFactory
 import io.github.fplayer.core.model.MediaId
@@ -36,6 +39,9 @@ import io.github.fplayer.core.script.PlaybackClock
 import io.github.fplayer.core.script.PlaybackDiscontinuity
 import io.github.fplayer.core.script.ManualAxisTarget
 import io.github.fplayer.core.script.ScriptBundle
+import io.github.fplayer.core.script.ScriptHeatmap
+import io.github.fplayer.core.script.ScriptHeatmapDownsampler
+import io.github.fplayer.core.script.HeatmapWindow
 import io.github.fplayer.core.script.ScriptSchedulerConfig
 import io.github.fplayer.core.device.StopReason
 import io.github.fplayer.player.mpv.LibMpvPlayer
@@ -60,12 +66,26 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
     private var preparedEventCount = 0L
     private var completedEventCount = 0L
     private var failedEventCount = 0L
+    private val seekCoordinator = PlaybackSeekCoordinator()
+    private var pendingSeekCallback: ((SeekConfirmation) -> Unit)? = null
+    private var pendingSeekToken: Long? = null
+    private var pendingSeekDeadlineMs = 0L
+    private var currentScriptHeatmap: ScriptHeatmap? = null
+    private var playbackObserver: ((Diagnostics) -> Unit)? = null
     private lateinit var playbackCoordinator: DevicePlaybackCoordinator
     private val scriptTick = object : Runnable {
         override fun run() {
             if (destroyed) return
             playbackCoordinator.tick()
+            confirmPendingSeek()
             mainHandler.postDelayed(this, SCRIPT_TICK_INTERVAL_MS)
+        }
+    }
+    private val uiTick = object : Runnable {
+        override fun run() {
+            if (destroyed) return
+            publishDiagnostics()
+            mainHandler.postDelayed(this, UI_TICK_INTERVAL_MS)
         }
     }
 
@@ -77,12 +97,25 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
         val positionMs: Long,
         val durationMs: Long?,
         val isPlaying: Boolean,
+        val scriptHeatmap: ScriptHeatmap?,
+    )
+
+    data class SeekConfirmation(
+        val token: Long,
+        val positionMs: Long?,
+        val accepted: Boolean,
+        val reason: String? = null,
     )
 
     inner class LocalBinder : Binder() {
         fun setActivityVisible(visible: Boolean) = controller.onActivityVisibilityChanged(visible)
+        fun setPlaybackObserver(observer: ((Diagnostics) -> Unit)?) {
+            playbackObserver = observer
+            observer?.invoke(diagnostics())
+        }
         fun refreshLibrary() = loadCommittedLibrary()
         fun selectMedia(mediaId: MediaId) {
+            currentScriptHeatmap = null
             playbackCoordinator.onDiscontinuity(PlaybackDiscontinuity.SEEK)
             if (playbackSession.snapshot().order?.mediaIds?.contains(mediaId) == true) {
                 playbackSession.select(mediaId)
@@ -90,6 +123,7 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
                 loadCommittedLibrary(mediaId)
             }
             controller.startPlayback()
+            publishDiagnostics()
         }
         fun setLooping(enabled: Boolean) {
             playbackCoordinator.onDiscontinuity(PlaybackDiscontinuity.LOOP)
@@ -99,17 +133,40 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
             playbackCoordinator.onDiscontinuity(PlaybackDiscontinuity.SEEK)
             engine.seekTo(positionMs)
         }
+        fun seekTo(positionMs: Long, token: Long, callback: (SeekConfirmation) -> Unit) {
+            if (token <= 0L || positionMs < 0L) {
+                callback(SeekConfirmation(token, null, accepted = false, reason = "INVALID_SEEK"))
+                return
+            }
+            pendingSeekCallback?.invoke(SeekConfirmation(
+                pendingSeekToken ?: token,
+                null,
+                accepted = false,
+                reason = "SEEK_REPLACED",
+            ))
+            pendingSeekCallback = callback
+            pendingSeekToken = token
+            pendingSeekDeadlineMs = android.os.SystemClock.uptimeMillis() + SEEK_CONFIRM_TIMEOUT_MS
+            seekCoordinator.submit(token, positionMs)
+            runCatching {
+                playbackCoordinator.onDiscontinuity(PlaybackDiscontinuity.SEEK)
+                engine.seekTo(positionMs)
+            }.onFailure {
+                finishSeek(SeekConfirmation(token, null, accepted = false, reason = "ENGINE_REJECTED"))
+            }
+        }
         fun setSpeed(speed: Float) {
             playbackCoordinator.onDiscontinuity(PlaybackDiscontinuity.SPEED_CHANGED)
             engine.setSpeed(speed.toDouble())
         }
         fun loadScript(bundle: ScriptBundle, config: ScriptSchedulerConfig = ScriptSchedulerConfig()) {
+            currentScriptHeatmap = bundleHeatmap(bundle)
             playbackCoordinator.load(bundle, config)
         }
         fun sendManualAxis(target: ManualAxisTarget, allowWhenPaused: Boolean = false): Boolean =
             playbackCoordinator.submitManual(target, allowWhenPaused)
-        fun play() = controller.startPlayback()
-        fun pause() = controller.pausePlayback()
+        fun play() { controller.startPlayback(); publishDiagnostics() }
+        fun pause() { controller.pausePlayback(); publishDiagnostics() }
         fun stopDevices() = controller.stopDevices()
         fun enableBackgroundPlayback() {
             startForegroundService(Intent(this@PlaybackService, PlaybackService::class.java).setAction(ACTION_START))
@@ -132,7 +189,17 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
                 player.positionMs,
                 player.durationMs,
                 player.isPlaying,
+                currentScriptHeatmap,
             )
+        }
+
+        fun attachSurface(surface: Surface): Boolean = runCatching {
+            (engine as? LibMpvPlayer)?.attachSurface(surface) ?: return false
+            true
+        }.getOrDefault(false)
+
+        fun detachSurface() {
+            runCatching { (engine as? LibMpvPlayer)?.detachSurface() }
         }
     }
 
@@ -145,6 +212,7 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
             PlaybackClock { engine.snapshot() },
         )
         mainHandler.post(scriptTick)
+        mainHandler.post(uiTick)
         engine.setEventListener { event -> mainHandler.post { handlePlayerEvent(event) } }
         indexDatabase = FPlayerIndexDatabase.open(this)
         mediaSession = MediaSession(this, TAG).apply {
@@ -182,7 +250,10 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
 
     override fun onDestroy() {
         destroyed = true
+        finishSeek(SeekConfirmation(pendingSeekToken ?: 0L, null, accepted = false, reason = "SERVICE_DESTROYED"))
         mainHandler.removeCallbacks(scriptTick)
+        mainHandler.removeCallbacks(uiTick)
+        playbackObserver = null
         if (::controller.isInitialized) controller.onServiceDestroyed()
         if (::playbackCoordinator.isInitialized) {
             playbackCoordinator.clear(StopReason.SERVICE_DESTROYED)
@@ -259,6 +330,40 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
             ),
         )
         if (selected != null) playbackSession.select(selected)
+    }
+
+    private fun confirmPendingSeek() {
+        val token = pendingSeekToken ?: return
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now >= pendingSeekDeadlineMs) {
+            finishSeek(SeekConfirmation(token, null, accepted = false, reason = "SEEK_TIMEOUT"))
+            return
+        }
+        val result = seekCoordinator.observe(token, engine.snapshot().positionMs)
+        if (result is SeekConfirmationResult.Confirmed) {
+            finishSeek(SeekConfirmation(result.token, result.positionMs, accepted = true))
+        }
+    }
+
+    private fun finishSeek(confirmation: SeekConfirmation) {
+        val callback = pendingSeekCallback ?: return
+        pendingSeekCallback = null
+        pendingSeekToken = null
+        pendingSeekDeadlineMs = 0L
+        callback(confirmation)
+        publishDiagnostics()
+    }
+
+    private fun publishDiagnostics() {
+        playbackObserver?.invoke(binder.diagnostics())
+    }
+
+    private fun bundleHeatmap(bundle: ScriptBundle): ScriptHeatmap? {
+        val endMs = bundle.tracks.values.flatMap { it.actions }.maxOfOrNull { it.atMs } ?: return null
+        if (endMs <= 0L) return null
+        return runCatching {
+            ScriptHeatmapDownsampler.downsample(bundle, HeatmapWindow(0L, endMs), maxSamplesPerAxis = 64)
+        }.getOrNull()
     }
 
     private fun handlePlayerEvent(event: PlayerEvent) {
@@ -350,6 +455,8 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
         private const val CHANNEL_ID = "fplayer.playback"
         private const val NOTIFICATION_ID = 1001
         private const val SCRIPT_TICK_INTERVAL_MS = 50L
+        private const val UI_TICK_INTERVAL_MS = 250L
+        private const val SEEK_CONFIRM_TIMEOUT_MS = 2_000L
         const val ACTION_START = "io.github.fplayer.android.action.START"
         const val ACTION_PLAY = "io.github.fplayer.android.action.PLAY"
         const val ACTION_PAUSE = "io.github.fplayer.android.action.PAUSE"

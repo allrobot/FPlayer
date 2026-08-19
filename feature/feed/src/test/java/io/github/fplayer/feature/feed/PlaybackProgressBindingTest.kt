@@ -35,4 +35,15 @@ class PlaybackProgressBindingTest {
         assertTrue(binding.onSeekConfirmed(token = 1, positionMs = 700))
         assertEquals(700L, binding.snapshot().mediaPositionMs)
     }
+
+    @Test
+    fun failedSeekReleasesFeedPagingBlock() {
+        val binding = PlaybackProgressBinding(1_000) { _, _ -> }
+        binding.onPointerDown()
+        binding.onPointerMove(0.5f)
+        binding.onPointerUp()
+        assertTrue(binding.snapshot().feedPagingBlocked)
+        assertTrue(binding.onSeekFailed(1L))
+        assertFalse(binding.snapshot().feedPagingBlocked)
+    }
 }

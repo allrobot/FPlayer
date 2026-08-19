@@ -28,6 +28,7 @@ data class LibraryGridItem(
     val durationMs: Long?,
     val progressPermille: Int,
     val hasScript: Boolean,
+    val thumbnailKey: String? = null,
 ) {
     init {
         require(durationMs == null || durationMs >= 0L)

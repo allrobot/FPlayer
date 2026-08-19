@@ -31,7 +31,12 @@ object ProgressHeatmapRenderer {
         heatmap: ScriptHeatmap?,
         snapshot: ProgressInteractionSnapshot,
     ): ProgressHeatmapRenderModel {
-        if (heatmap == null || heatmap.axes.isEmpty() || heatmap.axes.values.none { it.samples.isNotEmpty() }) {
+        if (
+            heatmap == null ||
+            heatmap.axes.isEmpty() ||
+            heatmap.axes.values.none { it.samples.isNotEmpty() } ||
+            heatmap.window.endMs <= heatmap.window.startMs
+        ) {
             return ProgressHeatmapRenderModel(
                 mode = ProgressInteractionMode.BAR,
                 progress = snapshot.progress.coerceIn(0f, 1f),

@@ -40,6 +40,7 @@ data class LibraryCatalogMedia(
     val liked: Boolean,
     val favorite: Boolean,
     val disliked: Boolean,
+    val thumbnailKey: String? = null,
 )
 
 data class LibraryCatalogInput(

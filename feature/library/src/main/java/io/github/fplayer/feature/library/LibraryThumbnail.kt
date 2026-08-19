@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material.icons.outlined.SmartDisplay
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -36,10 +37,17 @@ object LibraryThumbnailPresentation {
 @Composable
 fun LibraryThumbnail(
     key: String?,
-    loader: (String) -> LibraryThumbnailState,
+    loader: suspend (String) -> LibraryThumbnailState,
     modifier: Modifier = Modifier,
 ) {
-    val state = LibraryThumbnailPresentation.load(key, loader)
+    val state = produceState<LibraryThumbnailState>(
+        initialValue = if (key == null) LibraryThumbnailState.Unavailable else LibraryThumbnailState.Loading,
+        key1 = key,
+    ) {
+        if (key != null) {
+            value = runCatching { loader(key) }.getOrElse { LibraryThumbnailState.Error }
+        }
+    }.value
     when (state) {
         is LibraryThumbnailState.Ready -> Image(
             bitmap = state.image,

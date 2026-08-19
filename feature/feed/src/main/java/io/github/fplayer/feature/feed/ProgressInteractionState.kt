@@ -97,6 +97,14 @@ class ProgressInteractionStateMachine(
         return true
     }
 
+    fun onSeekFailed(token: Long): Boolean {
+        if (phaseValue != ProgressInteractionPhase.SETTLING || token != seekTokenValue) return false
+        previewPositionValue = mediaPositionValue
+        submittedPositionValue = null
+        phaseValue = ProgressInteractionPhase.PAUSED
+        return true
+    }
+
     fun consumeHapticEdge(): ProgressHapticEdge = hapticValue.also { hapticValue = ProgressHapticEdge.NONE }
 
     fun snapshot(): ProgressInteractionSnapshot = ProgressInteractionSnapshot(
