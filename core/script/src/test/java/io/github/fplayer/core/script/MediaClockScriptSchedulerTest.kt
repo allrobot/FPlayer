@@ -140,8 +140,8 @@ class MediaClockScriptSchedulerTest {
         scheduler.load(
             twoAxisBundle(),
             ScriptSchedulerConfig(
-                scriptOutputLimits = ScriptOutputLimits(mapOf(AxisId("L0") to ScriptAxisOutputRange(0, 10))),
-                deviceOutputLimits = mapOf(AxisId("L0") to AxisLimit(20, 30)),
+                scriptOutputLimits = ScriptOutputLimits(mapOf(AxisId("R0") to ScriptAxisOutputRange(0, 10))),
+                deviceOutputLimits = mapOf(AxisId("R0") to AxisLimit(20, 30)),
             ),
         )
 
@@ -203,6 +203,108 @@ class MediaClockScriptSchedulerTest {
         assertTrue(integrated.submitManual(ManualAxisTarget(AxisId("L0"), 50), allowWhenPaused = true))
 
         assertEquals(1, safety.drain(0, 0, integrated.currentGeneration).sentCommands)
+    }
+
+    @Test
+    fun `paused manual takeover stops queued scripted axes before one advanced generation target`() {
+        val frames = mutableListOf<String>()
+        val safety = DeviceSafetyController(
+            DeviceSafetyConfig(
+                version = TCodeVersion.V0_3,
+                axes = mapOf(AxisId("L0") to AxisSafetyConfig(), AxisId("R0") to AxisSafetyConfig()),
+                minimumFrameIntervalMs = 0,
+            ),
+        ) { frame, _ -> frames += frame.toString(Charsets.US_ASCII) }
+        safety.connect()
+        val integrated = MediaClockScriptScheduler(clock, safety)
+        integrated.load(twoAxisBundle())
+        integrated.tick()
+        clock.value = snapshot(isPlaying = false)
+
+        assertTrue(integrated.submitManual(ManualAxisTarget(AxisId("L0"), 50), allowWhenPaused = true))
+        assertEquals(2, integrated.currentGeneration)
+        assertEquals(1, safety.drain(0, 0, integrated.currentGeneration).sentCommands)
+
+        assertEquals(listOf("DSTOP\n", "L05000I250\n"), frames)
+    }
+
+    @Test
+    fun `repeated paused manual targets keep the takeover generation without another stop`() {
+        scheduler.load(twoAxisBundle())
+        scheduler.tick()
+        clock.value = snapshot(isPlaying = false)
+
+        assertTrue(scheduler.submitManual(ManualAxisTarget(AxisId("L0"), 50), allowWhenPaused = true))
+        assertTrue(scheduler.submitManual(ManualAxisTarget(AxisId("L0"), 60), allowWhenPaused = true))
+
+        assertEquals(
+            listOf(
+                Event.Stop(StopReason.PLAYBACK_PAUSED),
+                Event.Target("L0", 50, 250, 2, 0),
+                Event.Target("L0", 60, 250, 2, 0),
+            ),
+            controller.events.drop(2),
+        )
+    }
+
+    @Test
+    fun `manual-only output is stopped when playback ends`() {
+        scheduler.load(singleAxisBundle())
+        assertTrue(scheduler.submitManual(ManualAxisTarget(AxisId("L0"), 50)))
+
+        scheduler.onPlaybackEnded()
+
+        assertEquals(Event.Stop(StopReason.PLAYBACK_ENDED), controller.events.last())
+        assertEquals(2, scheduler.currentGeneration)
+    }
+
+    @Test
+    fun `manual-only output is stopped when playback pauses`() {
+        scheduler.load(singleAxisBundle())
+        assertTrue(scheduler.submitManual(ManualAxisTarget(AxisId("L0"), 50)))
+        clock.value = snapshot(isPlaying = false)
+
+        scheduler.tick()
+
+        assertEquals(Event.Stop(StopReason.PLAYBACK_PAUSED), controller.events.last())
+        assertEquals(2, scheduler.currentGeneration)
+    }
+
+    @Test
+    fun `manual output rejects buffering ended and invalid snapshots even with override`() {
+        scheduler.load(singleAxisBundle())
+
+        clock.value = snapshot(isPlaying = false, isBuffering = true)
+        assertFalse(scheduler.submitManual(ManualAxisTarget(AxisId("L0"), 50), allowWhenPaused = true))
+        clock.value = snapshot(positionMs = 2_000, durationMs = 2_000)
+        assertFalse(scheduler.submitManual(ManualAxisTarget(AxisId("L0"), 50), allowWhenPaused = true))
+        clock.value = snapshot(speed = 0.0)
+        assertFalse(scheduler.submitManual(ManualAxisTarget(AxisId("L0"), 50), allowWhenPaused = true))
+        clock.value = snapshot(positionMs = -1)
+        assertFalse(scheduler.submitManual(ManualAxisTarget(AxisId("L0"), 50), allowWhenPaused = true))
+        clock.value = snapshot(durationMs = -1)
+        assertFalse(scheduler.submitManual(ManualAxisTarget(AxisId("L0"), 50), allowWhenPaused = true))
+
+        assertTrue(controller.events.isEmpty())
+    }
+
+    @Test
+    fun `resumed scripted tick advances past manual mode before scheduling axes`() {
+        scheduler.load(twoAxisBundle())
+        assertTrue(scheduler.submitManual(ManualAxisTarget(AxisId("L0"), 50)))
+        clock.value = snapshot(positionMs = 100)
+
+        scheduler.tick()
+
+        assertEquals(
+            listOf(
+                Event.Target("L0", 50, 250, 1, 0),
+                Event.Stop(StopReason.SCRIPT_CHANGED),
+                Event.Target("L0", 20, 100, 2, 200),
+                Event.Target("R0", 80, 100, 2, 200),
+            ),
+            controller.events,
+        )
     }
 
     @Test

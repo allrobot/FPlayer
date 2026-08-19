@@ -56,6 +56,7 @@ class MediaClockScriptScheduler(
     private var config = ScriptSchedulerConfig()
     private var generation = 0L
     private var active = false
+    private var outputMode = OutputMode.NONE
     private var lastSpeed: Double? = null
     private val lastSubmittedMediaTimeByAxis = mutableMapOf<AxisId, Long>()
 
@@ -67,6 +68,7 @@ class MediaClockScriptScheduler(
         this.bundle = bundle
         this.config = config
         active = false
+        outputMode = OutputMode.NONE
         lastSpeed = null
         lastSubmittedMediaTimeByAxis.clear()
     }
@@ -84,6 +86,7 @@ class MediaClockScriptScheduler(
         if (bundle != null) stopAndAdvance(reason)
         bundle = null
         active = false
+        outputMode = OutputMode.NONE
         lastSpeed = null
         lastSubmittedMediaTimeByAxis.clear()
     }
@@ -115,6 +118,10 @@ class MediaClockScriptScheduler(
         }
         if (slice != null && snapshot.positionMs < slice.mediaStartMs) return
 
+        if (outputMode == OutputMode.MANUAL) {
+            stopAndAdvance(StopReason.SCRIPT_CHANGED)
+        }
+
         val previousSpeed = lastSpeed
         if (active && previousSpeed != null && previousSpeed != snapshot.speed) {
             stopAndAdvance(StopReason.PLAYBACK_SPEED_CHANGED)
@@ -140,15 +147,19 @@ class MediaClockScriptScheduler(
         targets.forEach { lastSubmittedMediaTimeByAxis[it.axis] = it.mediaTimeMs }
         val submitted = targets.isNotEmpty()
         active = submitted
+        outputMode = if (submitted) OutputMode.SCRIPTED else OutputMode.NONE
         lastSpeed = snapshot.speed
     }
 
     fun submitManual(target: ManualAxisTarget, allowWhenPaused: Boolean = false): Boolean {
         if (bundle == null) return false
         val snapshot = clock.snapshot()
-        if ((!snapshot.isPlaying || snapshot.isBuffering) && !allowWhenPaused) return false
+        if (!isManualSnapshotValid(snapshot) || (!snapshot.isPlaying && !allowWhenPaused)) return false
+        if (outputMode == OutputMode.SCRIPTED) {
+            stopAndAdvance(if (snapshot.isPlaying) StopReason.USER else StopReason.PLAYBACK_PAUSED)
+        }
         val mediaTimeMs = maxOf(
-            snapshot.positionMs.coerceAtLeast(0L),
+            snapshot.positionMs,
             lastSubmittedMediaTimeByAxis[target.axis] ?: 0L,
         )
         val durationMs = target.durationMs.coerceIn(1L, config.maxCommandDurationMs)
@@ -161,7 +172,16 @@ class MediaClockScriptScheduler(
         )
         controller.submit(deviceTarget)
         lastSubmittedMediaTimeByAxis[target.axis] = mediaTimeMs
+        active = true
+        outputMode = OutputMode.MANUAL
         return true
+    }
+
+    private fun isManualSnapshotValid(snapshot: PlayerSnapshot): Boolean {
+        if (snapshot.isBuffering || !snapshot.speed.isFinite() || snapshot.speed <= 0.0 || snapshot.positionMs < 0) {
+            return false
+        }
+        return snapshot.durationMs?.let { it >= 0 && snapshot.positionMs < it } ?: true
     }
 
     private fun effectivePosition(axis: AxisId, position: Int): Int {
@@ -207,6 +227,7 @@ class MediaClockScriptScheduler(
         generation += 1
         controller.stop(reason)
         active = false
+        outputMode = OutputMode.NONE
         lastSpeed = null
         lastSubmittedMediaTimeByAxis.clear()
     }
@@ -221,5 +242,11 @@ class MediaClockScriptScheduler(
         Math.subtractExact(left, right)
     } catch (_: ArithmeticException) {
         if (right < 0) Long.MAX_VALUE else Long.MIN_VALUE
+    }
+
+    private enum class OutputMode {
+        NONE,
+        SCRIPTED,
+        MANUAL,
     }
 }
