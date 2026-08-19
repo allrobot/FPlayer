@@ -14,8 +14,10 @@ import io.github.fplayer.core.script.ScriptSchedulerConfig
 import io.github.fplayer.core.script.SerializedScriptPlaybackCoordinator
 import io.github.fplayer.core.script.effectiveOffsetMs
 import java.io.Closeable
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 
 /** Process-scoped bridge between the device route and the playback service. */
 class DevicePlaybackCoordinator(
@@ -33,6 +35,7 @@ class DevicePlaybackCoordinator(
     private var estimate = LatencyEstimate(LatencyMeasurementState.UNMEASURED, 0L, null, 0, null)
     private val stateLock = Any()
     private var teardownController: DeviceController? = null
+    private var teardownFinished: CountDownLatch? = null
     private var closing = false
     @Volatile private var closed = false
 
@@ -112,71 +115,91 @@ class DevicePlaybackCoordinator(
         operation: (DeviceController) -> Unit,
     ): Boolean {
         var accepted = false
-        val task = synchronized(stateLock) {
+        var waitFor: CountDownLatch? = null
+        var task: Future<*>? = null
+        synchronized(stateLock) {
             if (closed) return teardownController === controller
-            serial.submit {
-                if (this.controller === controller) {
-                    operation(controller)
-                    accepted = true
-                } else if (teardownController === controller) {
-                    // A close task already owns this controller; do not let the
-                    // session fall back to another executor after teardown.
-                    accepted = true
+            if (closing && teardownController === controller) {
+                waitFor = teardownFinished
+            } else {
+                task = serial.submit {
+                    if (this.controller === controller) {
+                        operation(controller)
+                        accepted = true
+                    } else if (teardownController === controller) {
+                        // A close task already owns this controller; do not let the
+                        // session fall back to another executor after teardown.
+                        accepted = true
+                    }
                 }
             }
         }
-        task.get()
+        waitFor?.await()
+        task?.get()
+        if (waitFor != null) accepted = true
         return accepted
     }
 
     override fun releaseController(controller: DeviceController, reason: StopReason): Boolean {
         var released = false
-        val task = synchronized(stateLock) {
+        var waitFor: CountDownLatch? = null
+        var task: Future<*>? = null
+        synchronized(stateLock) {
             if (closed) return teardownController === controller
-            serial.submit {
-                if (this.controller !== controller) {
-                    if (teardownController === controller) released = true
-                    return@submit
-                }
-                scheduler?.clear(reason)
-                scheduler?.close()
-                runCatching {
-                    when (reason) {
-                        StopReason.CONNECTION_LOST -> (controller as? DeviceSafetyController)?.onConnectionLost()
-                        else -> controller.stop(reason)
+            if (closing && teardownController === controller) {
+                waitFor = teardownFinished
+            } else {
+                task = serial.submit {
+                    if (this.controller !== controller) {
+                        if (teardownController === controller) released = true
+                        return@submit
                     }
-                    controller.disconnect()
-                    (controller as? AutoCloseable)?.close()
+                    scheduler?.clear(reason)
+                    scheduler?.close()
+                    runCatching {
+                        when (reason) {
+                            StopReason.CONNECTION_LOST -> (controller as? DeviceSafetyController)?.onConnectionLost()
+                            else -> controller.stop(reason)
+                        }
+                        controller.disconnect()
+                        (controller as? AutoCloseable)?.close()
+                    }
+                    scheduler = null
+                    this.controller = null
+                    teardownController = null
+                    estimate = LatencyEstimate(LatencyMeasurementState.UNMEASURED, 0L, null, 0, null)
+                    released = true
                 }
-                scheduler = null
-                this.controller = null
-                teardownController = null
-                estimate = LatencyEstimate(LatencyMeasurementState.UNMEASURED, 0L, null, 0, null)
-                released = true
             }
         }
-        task.get()
+        waitFor?.await()
+        task?.get()
+        if (waitFor != null) released = true
         return released
     }
 
     override fun close() {
-        synchronized(stateLock) {
-            if (closed || closing) return
-        }
         val task = synchronized(stateLock) {
+            if (closed || closing) return
             closing = true
             teardownController = controller
+            val finished = CountDownLatch(1)
+            teardownFinished = finished
             serial.submit {
-                scheduler?.clear(StopReason.SERVICE_DESTROYED)
-                scheduler?.close()
-                controller?.stop(StopReason.SERVICE_DESTROYED)
-                controller?.disconnect()
-                (controller as? AutoCloseable)?.close()
-                scheduler = null
-                controller = null
-                synchronized(stateLock) {
-                    closed = true
-                    closing = false
+                try {
+                    runCatching { scheduler?.clear(StopReason.SERVICE_DESTROYED) }
+                    runCatching { scheduler?.close() }
+                    runCatching { controller?.stop(StopReason.SERVICE_DESTROYED) }
+                    runCatching { controller?.disconnect() }
+                    runCatching { (controller as? AutoCloseable)?.close() }
+                    scheduler = null
+                    controller = null
+                } finally {
+                    synchronized(stateLock) {
+                        closed = true
+                        closing = false
+                    }
+                    finished.countDown()
                 }
             }
         }
@@ -185,8 +208,11 @@ class DevicePlaybackCoordinator(
     }
 
     private fun submit(block: () -> Unit) {
-        if (closed) return
-        serial.submit(block).get()
+        val task = synchronized(stateLock) {
+            if (closed || closing) return
+            serial.submit(block)
+        }
+        task.get()
     }
 
 }
