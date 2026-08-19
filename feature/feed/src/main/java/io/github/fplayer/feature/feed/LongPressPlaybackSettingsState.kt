@@ -1,5 +1,7 @@
 package io.github.fplayer.feature.feed
 
+import io.github.fplayer.core.script.ScriptPlaybackSettingsSnapshot
+
 enum class PlaybackTouchRegion {
     CENTER,
     LEFT_EDGE,
@@ -35,6 +37,7 @@ data class LongPressPlaybackSnapshot(
     val panelOrientation: PlaybackPanelOrientation,
     val panelPlacement: PlaybackPanelPlacement,
     val settings: PlaybackSettings,
+    val scriptSettings: ScriptPlaybackSettingsSnapshot,
     val temporarySpeedSide: PlaybackTouchRegion?,
     val effectiveSpeed: Float,
     val longPressHapticPending: Boolean,
@@ -45,6 +48,7 @@ data class LongPressPlaybackSnapshot(
 class LongPressPlaybackSettingsStateMachine(
     orientation: PlaybackPanelOrientation = PlaybackPanelOrientation.PORTRAIT,
     settings: PlaybackSettings = PlaybackSettings(),
+    scriptSettings: ScriptPlaybackSettingsSnapshot = ScriptPlaybackSettingsSnapshot(),
 ) {
     companion object {
         const val LONG_PRESS_MS = 500L
@@ -54,6 +58,7 @@ class LongPressPlaybackSettingsStateMachine(
 
     private var orientationValue = orientation
     private var settingsValue = settings
+    private var scriptSettingsValue = scriptSettings
     private var panelOpenValue = false
     private var pointerRegion: PlaybackTouchRegion? = null
     private var pointerDownAtMs = 0L
@@ -72,6 +77,10 @@ class LongPressPlaybackSettingsStateMachine(
     fun updateSettings(settings: PlaybackSettings) {
         settingsValue = settings
         if (temporarySideValue != null && !settings.edgeTemporarySpeedEnabled) temporarySideValue = null
+    }
+
+    fun updateScriptSettings(settings: ScriptPlaybackSettingsSnapshot) {
+        scriptSettingsValue = settings
     }
 
     fun onPointerDown(region: PlaybackTouchRegion, nowMs: Long) {
@@ -156,6 +165,7 @@ class LongPressPlaybackSettingsStateMachine(
                 PlaybackPanelPlacement.SIDE_SHEET
             },
             settings = settingsValue,
+            scriptSettings = scriptSettingsValue,
             temporarySpeedSide = temporarySideValue,
             effectiveSpeed = speed,
             longPressHapticPending = longPressHapticValue,

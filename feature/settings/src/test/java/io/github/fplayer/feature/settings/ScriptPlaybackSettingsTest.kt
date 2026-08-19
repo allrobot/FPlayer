@@ -140,4 +140,24 @@ class ScriptPlaybackSettingsTest {
         assertNull(reset.estimate.medianRoundTripMs)
         assertNull(reset.estimate.measuredAtMonotonicMs)
     }
+
+    @Test
+    fun `snapshot preserves playback facing script settings`() {
+        val axis = AxisId("R2")
+        val state = reduce(
+            reduce(
+                ScriptPlaybackSettingsState(),
+                ScriptPlaybackSettingsAction.SetAxisRange(axis, 25, 75),
+            ),
+            ScriptPlaybackSettingsAction.SetManualAxis(axis),
+        )
+
+        val snapshot = state.snapshot()
+
+        assertEquals(state.latency, snapshot.latency)
+        assertEquals(state.estimate, snapshot.estimate)
+        assertEquals(ScriptAxisOutputRange(25, 75), snapshot.outputLimits.rangeFor(axis))
+        assertEquals(axis, snapshot.selectedManualAxis)
+        assertEquals(50, snapshot.manualPosition)
+    }
 }

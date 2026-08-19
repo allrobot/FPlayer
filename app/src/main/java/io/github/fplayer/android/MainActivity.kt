@@ -73,6 +73,7 @@ import io.github.fplayer.feature.feed.PlaybackOverlayAction
 import io.github.fplayer.feature.feed.PlaybackOverlayMode
 import io.github.fplayer.feature.feed.PlaybackOverlayReducer
 import io.github.fplayer.feature.feed.PlaybackOverlayState
+import io.github.fplayer.feature.feed.LongPressPlaybackSettingsStateMachine
 import io.github.fplayer.feature.library.HomeSurface
 import io.github.fplayer.feature.library.LibraryContentFilter
 import io.github.fplayer.feature.library.LibraryFolderHeader
@@ -85,6 +86,7 @@ import io.github.fplayer.feature.library.LibraryCatalogScreen
 import io.github.fplayer.feature.library.LibraryCatalogStateMachine
 import io.github.fplayer.feature.library.LibraryIndexRepository
 import io.github.fplayer.feature.settings.ScriptPlaybackSettingsState
+import io.github.fplayer.feature.settings.ScriptPlaybackSettingsStateSaver
 import io.github.fplayer.feature.settings.ScriptPlaybackSettingsSurface
 import io.github.fplayer.feature.settings.reduce
 import kotlinx.coroutines.Dispatchers
@@ -202,7 +204,9 @@ private fun FPlayerApp(
     }
     var librarySnapshot by remember { mutableStateOf(libraryState.snapshot()) }
     var libraryJumpTarget by remember { mutableStateOf<LibraryJumpTarget?>(null) }
-    var scriptPlaybackSettings by remember { mutableStateOf(ScriptPlaybackSettingsState()) }
+    var scriptPlaybackSettings by rememberSaveable(stateSaver = ScriptPlaybackSettingsStateSaver) {
+        mutableStateOf(ScriptPlaybackSettingsState())
+    }
     fun refreshLibrary() { librarySnapshot = libraryState.snapshot() }
     fun openCurrentGrid() {
         libraryJumpTarget = libraryState.openGridFromFeed(librarySnapshot.currentMediaId)
@@ -270,6 +274,8 @@ private fun FPlayerApp(
                 )
                 HomeSurface.DEFAULT_FEED, HomeSurface.FOLDER_PLAYBACK -> PlaybackFeedScreen(
                     modifier = Modifier.padding(contentPadding),
+                    scriptPlaybackSettings = scriptPlaybackSettings,
+                    onOpenSettings = { destinationName = AppDestination.SETTINGS.name },
                     onOpenGrid = ::openCurrentGrid,
                     onOpenDrawer = {
                         catalogDrawerSignal += 1
@@ -319,7 +325,10 @@ private fun FPlayerApp(
                     scriptPlaybackSettings = reduce(scriptPlaybackSettings, action)
                 },
                 modifier = Modifier.padding(contentPadding).fillMaxSize(),
-                availableAxes = listOf(AxisId("L0")),
+                availableAxes = listOf(
+                    AxisId("L0"), AxisId("L1"), AxisId("L2"),
+                    AxisId("R0"), AxisId("R1"), AxisId("R2"),
+                ),
             )
         }
     }
@@ -328,12 +337,16 @@ private fun FPlayerApp(
 @Composable
 private fun PlaybackFeedScreen(
     modifier: Modifier = Modifier,
+    scriptPlaybackSettings: ScriptPlaybackSettingsState,
+    onOpenSettings: () -> Unit,
     onOpenGrid: () -> Unit,
     onOpenDrawer: () -> Unit,
     onOpenSearch: () -> Unit,
 ) {
     var overlay by rememberSaveable(stateSaver = PlaybackOverlaySaver) { mutableStateOf(PlaybackOverlayState()) }
     val context = LocalContext.current
+    val playbackSettingsState = remember { LongPressPlaybackSettingsStateMachine() }
+    playbackSettingsState.updateScriptSettings(scriptPlaybackSettings.snapshot())
     val folderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
     ) { uri ->
@@ -378,7 +391,10 @@ private fun PlaybackFeedScreen(
                 OverlayIcon(Icons.Outlined.FolderOpen, "打开抽屉", onOpenDrawer)
                 OverlayIcon(Icons.Outlined.GridView, "当前文件夹网格", onOpenGrid)
                 OverlayIcon(Icons.Outlined.Search, "搜索", onOpenSearch)
-                OverlayIcon(Icons.Outlined.MoreVert, "更多") { dispatch(PlaybackOverlayAction.OpenMore) }
+                OverlayIcon(Icons.Outlined.MoreVert, "更多") {
+                    dispatch(PlaybackOverlayAction.OpenMore)
+                    onOpenSettings()
+                }
             }
             Column(
                 modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp),

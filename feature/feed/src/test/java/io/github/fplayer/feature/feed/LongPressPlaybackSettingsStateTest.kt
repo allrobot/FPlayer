@@ -1,11 +1,31 @@
 package io.github.fplayer.feature.feed
 
+import io.github.fplayer.core.model.AxisId
+import io.github.fplayer.core.script.ScriptPlaybackSettingsSnapshot
+import io.github.fplayer.core.script.ScriptAxisOutputRange
+import io.github.fplayer.core.script.ScriptOutputLimits
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LongPressPlaybackSettingsStateTest {
+    @Test
+    fun `playback snapshot carries script settings through state machine`() {
+        val scriptSettings = ScriptPlaybackSettingsSnapshot(
+            outputLimits = ScriptOutputLimits(
+                mapOf(AxisId("L0") to ScriptAxisOutputRange(20, 80)),
+            ),
+            selectedManualAxis = AxisId("L0"),
+            manualPosition = 60,
+        )
+        val machine = LongPressPlaybackSettingsStateMachine()
+
+        machine.updateScriptSettings(scriptSettings)
+
+        assertEquals(scriptSettings, machine.snapshot().scriptSettings)
+    }
+
     @Test fun centerLongPressOpensPanelAndRotationChangesPlacement() {
         val machine = LongPressPlaybackSettingsStateMachine()
         machine.onPointerDown(PlaybackTouchRegion.CENTER, 100L)

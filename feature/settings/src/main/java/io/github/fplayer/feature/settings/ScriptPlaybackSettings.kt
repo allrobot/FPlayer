@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +39,7 @@ import io.github.fplayer.core.script.LatencyMeasurementState
 import io.github.fplayer.core.script.ManualAxisTarget
 import io.github.fplayer.core.script.ScriptAxisOutputRange
 import io.github.fplayer.core.script.ScriptOutputLimits
+import io.github.fplayer.core.script.ScriptPlaybackSettingsSnapshot
 import io.github.fplayer.core.script.effectiveOffsetMs
 import kotlin.math.roundToInt
 
@@ -57,6 +59,49 @@ data class ScriptPlaybackSettingsState(
     val outputLimits: ScriptOutputLimits = ScriptOutputLimits(emptyMap()),
     val selectedManualAxis: AxisId = DEFAULT_AXIS,
     val manualPosition: Int = 50,
+) {
+    fun snapshot(): ScriptPlaybackSettingsSnapshot = ScriptPlaybackSettingsSnapshot(
+        latency = latency,
+        estimate = estimate,
+        outputLimits = outputLimits,
+        selectedManualAxis = selectedManualAxis,
+        manualPosition = manualPosition,
+    )
+}
+
+val ScriptPlaybackSettingsStateSaver: Saver<ScriptPlaybackSettingsState, List<Any?>> = Saver(
+    save = { state ->
+        listOf(
+            state.latency.automaticEnabled,
+            state.latency.manualOffsetMs,
+            state.outputLimits.perAxis.entries
+                .sortedBy { it.key.value }
+                .joinToString(";") { (axis, range) ->
+                    "${axis.value},${range.minimum},${range.maximum}"
+                },
+            state.selectedManualAxis.value,
+            state.manualPosition,
+        )
+    },
+    restore = { values ->
+        val ranges = (values[2] as? String).orEmpty().split(';').mapNotNull { encoded ->
+            if (encoded.isBlank()) return@mapNotNull null
+            val parts = encoded.split(',')
+            if (parts.size != 3) return@mapNotNull null
+            val minimum = parts[1].toIntOrNull() ?: return@mapNotNull null
+            val maximum = parts[2].toIntOrNull() ?: return@mapNotNull null
+            AxisId(parts[0]) to ScriptAxisOutputRange(minimum, maximum)
+        }.toMap()
+        ScriptPlaybackSettingsState(
+            latency = LatencyCompensationConfig().copy(
+                automaticEnabled = values[0] as Boolean,
+                manualOffsetMs = (values[1] as Number).toLong(),
+            ),
+            outputLimits = ScriptOutputLimits(ranges),
+            selectedManualAxis = AxisId(values[3] as String),
+            manualPosition = (values[4] as Number).toInt(),
+        )
+    },
 )
 
 sealed interface ScriptPlaybackSettingsAction {
@@ -200,7 +245,9 @@ private fun LatencySettings(
             modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize(),
             label = { Text("手动偏移 (ms)") },
             supportingText = { Text("-10000 到 +10000") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            // An ASCII keyboard exposes +/-; the reducer still accepts only a
+            // complete signed base-10 integer.
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
             singleLine = true,
         )
         Text(

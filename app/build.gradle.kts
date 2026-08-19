@@ -41,6 +41,7 @@ android {
 dependencies {
     implementation(project(":core:player-mpv"))
     implementation(project(":core:index"))
+    implementation(project(":core:script"))
     implementation(project(":feature:feed"))
     implementation(project(":feature:library"))
     implementation(project(":feature:device"))
