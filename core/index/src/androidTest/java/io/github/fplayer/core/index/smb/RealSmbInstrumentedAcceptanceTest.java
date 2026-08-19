@@ -55,18 +55,21 @@ public final class RealSmbInstrumentedAcceptanceTest {
             String root = requiredArgument(arguments, "smb_root");
             int expectedMedia = integerArgument(arguments, "expected_media", 1, 1_000);
             String username = arguments.getString("smb_username");
+            String passwordValue = arguments.getString("smb_password");
+            Assume.assumeTrue("REAL_SMB_DEVICE_ACCEPTANCE_BLOCKED_CREDENTIALS",
+                    username != null && !username.isBlank()
+                            && passwordValue != null && !passwordValue.isEmpty());
+            int expectedScripts = integerArgument(arguments, "expected_scripts", 0, 2_000);
             String credentialRef = null;
-            if (username != null && !username.isBlank()) {
-                password = requiredArgument(arguments, "smb_password").toCharArray();
-                CredentialStore.SmbCredential credential =
-                        new CredentialStore.SmbCredential(username, password);
-                try {
-                    credentials.put(CREDENTIAL_REF, credential);
-                } finally {
-                    credential.clear();
-                }
-                credentialRef = CREDENTIAL_REF;
+            password = passwordValue.toCharArray();
+            CredentialStore.SmbCredential credential =
+                    new CredentialStore.SmbCredential(username, password);
+            try {
+                credentials.put(CREDENTIAL_REF, credential);
+            } finally {
+                credential.clear();
             }
+            credentialRef = CREDENTIAL_REF;
 
             phase = "DATABASE";
             Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
@@ -76,6 +79,8 @@ public final class RealSmbInstrumentedAcceptanceTest {
             IndexDao dao = database.indexDao();
             SmbSourceConfig directConfig = config(host, port, share, root, credentialRef);
             new SmbSourceRepository(dao).create(directConfig, 1L);
+            assertEquals(directConfig.rootLocator(), dao.source(SOURCE_ID).rootLocator);
+            assertEquals(credentialRef, dao.source(SOURCE_ID).authRef);
             SmbScanner scanner = new SmbScanner(dao, new IncrementingClock());
 
             phase = "DIRECT_CONNECT";
@@ -91,7 +96,9 @@ public final class RealSmbInstrumentedAcceptanceTest {
                 assertNotNull(committed.scan);
                 assertTrue(committed.scan.committed);
                 assertEquals(expectedMedia, committed.scan.mediaCount);
+                assertEquals(expectedScripts, committed.scan.scriptCount);
                 assertEquals(expectedMedia, dao.currentMediaCount(SOURCE_ID));
+                assertMatchedScripts(dao, expectedScripts);
             }
 
             phase = "CONNECTION_CUT";
@@ -107,7 +114,7 @@ public final class RealSmbInstrumentedAcceptanceTest {
                     SmbScanner.SmbScanResult failed = scanner.scan(
                             proxyConfig,
                             2L,
-                            new CutAfterFirstListingTree(realTree, proxy),
+                            new CutBeforeFirstListingTree(realTree, proxy),
                             LocalSafScanner.Cancellation.NEVER
                     );
                     assertEquals(SmbScanner.SmbScanResult.State.FAILED, failed.state);
@@ -119,6 +126,20 @@ public final class RealSmbInstrumentedAcceptanceTest {
             assertEquals(IndexDao.SCAN_INCOMPLETE, dao.scanStatus(SOURCE_ID, 2L));
             assertEquals(Long.valueOf(1L), dao.source(SOURCE_ID).currentScanGeneration);
             assertEquals(expectedMedia, dao.currentMediaCount(SOURCE_ID));
+
+            phase = "RECOVERY";
+            try (SmbjDocumentTree recoveredTree = new SmbjDocumentTree(directConfig, credentials)) {
+                SmbScanner.SmbScanResult recovered = scanner.scan(
+                        directConfig, 3L, recoveredTree, LocalSafScanner.Cancellation.NEVER);
+                assertEquals(SmbScanner.SmbScanResult.State.ONLINE, recovered.state);
+                assertNotNull(recovered.scan);
+                assertTrue(recovered.scan.committed);
+                assertEquals(expectedMedia, recovered.scan.mediaCount);
+                assertEquals(expectedScripts, recovered.scan.scriptCount);
+                assertEquals(Long.valueOf(3L), dao.source(SOURCE_ID).currentScanGeneration);
+                assertEquals(expectedMedia, dao.currentMediaCount(SOURCE_ID));
+                assertMatchedScripts(dao, expectedScripts);
+            }
         } catch (Throwable failure) {
             throw new AssertionError("REAL_SMB_DEVICE_ACCEPTANCE_" + phase + "_FAILED_"
                     + failure.getClass().getSimpleName());
@@ -176,17 +197,24 @@ public final class RealSmbInstrumentedAcceptanceTest {
         return value;
     }
 
+    private static void assertMatchedScripts(IndexDao dao, int expectedScripts) {
+        long matched = dao.currentScriptSnapshot(SOURCE_ID).stream()
+                .filter(script -> script.mediaId != null)
+                .count();
+        assertEquals(expectedScripts, matched);
+    }
+
     private static final class IncrementingClock implements java.util.function.LongSupplier {
         private long value = 10L;
         @Override public long getAsLong() { return value++; }
     }
 
-    private static final class CutAfterFirstListingTree implements SmbDocumentTree {
+    private static final class CutBeforeFirstListingTree implements SmbDocumentTree {
         private final SmbDocumentTree delegate;
         private final CuttableTcpProxy proxy;
         private final AtomicBoolean firstListing = new AtomicBoolean(true);
 
-        CutAfterFirstListingTree(SmbDocumentTree delegate, CuttableTcpProxy proxy) {
+        CutBeforeFirstListingTree(SmbDocumentTree delegate, CuttableTcpProxy proxy) {
             this.delegate = delegate;
             this.proxy = proxy;
         }
@@ -195,14 +223,10 @@ public final class RealSmbInstrumentedAcceptanceTest {
         @Override public Entry root() throws IOException { return delegate.root(); }
 
         @Override public List<Entry> children(Entry directory) throws IOException {
-            List<Entry> children = delegate.children(directory);
             if (firstListing.compareAndSet(true, false)) {
                 proxy.cutConnections();
-                // A flat share may have no later directory read to observe the cut.
-                // Surface the interrupted operation deterministically after closing the proxy.
-                throw new IOException("SMB_CONNECTION_CUT");
             }
-            return children;
+            return delegate.children(directory);
         }
     }
 

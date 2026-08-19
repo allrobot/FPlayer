@@ -89,6 +89,14 @@ public final class SmbScannerTest {
         assertEquals(IndexDao.SCAN_INCOMPLETE, dao.scanStatus("smb-source", 2L));
         assertEquals(Long.valueOf(1L), dao.source("smb-source").currentScanGeneration);
         assertEquals(1, dao.currentMediaCount("smb-source"));
+
+        SmbScanner.SmbScanResult recovered = scanner.scan(
+                config, 3L, new FixtureTree(true), LocalSafScanner.Cancellation.NEVER);
+        assertEquals(SmbScanner.SmbScanResult.State.ONLINE, recovered.state);
+        assertTrue(recovered.scan.committed);
+        assertEquals(Long.valueOf(3L), dao.source("smb-source").currentScanGeneration);
+        assertEquals(IndexDao.SCAN_INCOMPLETE, dao.scanStatus("smb-source", 2L));
+        assertEquals(1, dao.currentMediaCount("smb-source"));
     }
 
     private static final class FixtureTree implements SmbDocumentTree {
