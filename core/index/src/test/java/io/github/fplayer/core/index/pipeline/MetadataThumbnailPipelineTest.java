@@ -75,6 +75,42 @@ public final class MetadataThumbnailPipelineTest {
         pipeline.cleanupCommitted();
     }
 
+    @Test public void committedOwnerDiscoversCurrentMediaAndSkipsReadyCacheOnRetry() throws Exception {
+        ThumbnailCache cache = new ThumbnailCache(cacheRoot);
+        AtomicInteger probes = new AtomicInteger();
+        CommittedThumbnailPipelineOwner owner = new CommittedThumbnailPipelineOwner(
+                dao,
+                cache,
+                locator -> {
+                    probes.incrementAndGet();
+                    return new MediaMetadataProbe.ProbeResult(321L, 640, 360, 30.0,
+                            "video/mp4", "h264", "aac", 0);
+                },
+                (locator, width, height) -> new byte[] {4, 5, 6},
+                160,
+                90,
+                "v1"
+        );
+
+        CommittedThumbnailPipelineOwner.Report first = owner.run("source", null, 3L);
+        assertEquals(1, first.thumbnails);
+        assertEquals(1, probes.get());
+        String key = dao.currentThumbnailForMedia("source", "media").cacheKey;
+        assertTrue(Files.size(cache.path(key)) > 0);
+
+        CommittedThumbnailPipelineOwner.Report second = owner.run("source", null, 4L);
+        assertEquals(0, second.thumbnails);
+        assertEquals(1, probes.get());
+    }
+
+    @Test public void cacheRootMatchesTheAppPrivateThumbnailDirectory() {
+        Context context = ApplicationProvider.getApplicationContext();
+        assertEquals(
+                context.getCacheDir().toPath().resolve("thumbnails").toAbsolutePath().normalize(),
+                ThumbnailCacheRoot.forContext(context)
+        );
+    }
+
     @Test public void cancellationStopsBeforeNextItemAndProbeFailureDoesNotAbortQueue() throws Exception {
         ThumbnailCache cache = new ThumbnailCache(cacheRoot);
         AtomicInteger calls = new AtomicInteger();

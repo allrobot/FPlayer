@@ -82,6 +82,8 @@ import androidx.compose.ui.unit.dp
 import io.github.fplayer.feature.device.DeviceConfigurationRoute
 import io.github.fplayer.core.index.saf.SafPermissionStore
 import io.github.fplayer.core.index.db.FPlayerIndexDatabase
+import io.github.fplayer.core.index.pipeline.AndroidThumbnailPipelineFactory
+import io.github.fplayer.core.index.pipeline.ThumbnailCacheRoot
 import io.github.fplayer.core.model.AxisId
 import io.github.fplayer.core.model.MediaLocator
 import io.github.fplayer.feature.feed.PlaybackOverlayAction
@@ -121,6 +123,7 @@ import kotlinx.coroutines.withContext
 
 open class MainActivity : ComponentActivity() {
     private var playbackBinder: PlaybackService.LocalBinder? = null
+    private val surfaceHandoff = PlaybackSurfaceHandoff { playbackBinder?.detachSurface() }
     private var playbackConnectionVersion by mutableIntStateOf(0)
     private var serviceBindingRequested = false
     private var pendingBackgroundPlaybackBinder: PlaybackService.LocalBinder? = null
@@ -141,6 +144,7 @@ open class MainActivity : ComponentActivity() {
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
+            surfaceHandoff.onHostStopped()
             playbackBinder = null
             playbackConnectionVersion += 1
         }
@@ -162,8 +166,10 @@ open class MainActivity : ComponentActivity() {
                         playbackBinder?.seekTo(positionMs, token, callback)
                             ?: callback(PlaybackService.SeekConfirmation(token, null, false, "SERVICE_UNAVAILABLE"))
                     },
-                    onSurfaceAvailable = { surface -> playbackBinder?.attachSurface(surface) == true },
-                    onSurfaceDestroyed = { playbackBinder?.detachSurface() },
+                    onSurfaceAvailable = { surface ->
+                        surfaceHandoff.recordAttachment(playbackBinder?.attachSurface(surface) == true)
+                    },
+                    onSurfaceDestroyed = surfaceHandoff::onSurfaceDestroyed,
                     serviceEpoch = playbackConnectionVersion,
                 )
             }
@@ -172,6 +178,7 @@ open class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        surfaceHandoff.onHostStarted()
         if (!serviceBindingRequested) {
             val intent = Intent(this, PlaybackService::class.java)
             serviceBindingRequested = bindService(intent, serviceConnection, BIND_AUTO_CREATE)
@@ -179,6 +186,7 @@ open class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        surfaceHandoff.onHostStopped()
         playbackBinder?.setActivityVisible(false)
         playbackBinder?.setPlaybackObserver(null)
         if (serviceBindingRequested) {
@@ -228,7 +236,7 @@ private fun FPlayerApp(
                 if (!key.matches(Regex("[0-9a-f]{64}"))) {
                     LibraryThumbnailState.Error
                 } else {
-                    val file = context.cacheDir.resolve("thumbnails").resolve("$key.thumb")
+                    val file = ThumbnailCacheRoot.forContext(context).resolve("$key.thumb").toFile()
                     val bitmap = BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
                     if (bitmap == null) LibraryThumbnailState.Error else LibraryThumbnailState.Ready(bitmap)
                 }
@@ -253,7 +261,14 @@ private fun FPlayerApp(
     }
     LaunchedEffect(indexDatabase) {
         val input = withContext(Dispatchers.IO) {
-            LibraryIndexRepository(indexDatabase.indexDao()).load()
+            val dao = indexDatabase.indexDao()
+            runCatching {
+                val owner = AndroidThumbnailPipelineFactory.create(context, dao)
+                dao.sources().forEach { source ->
+                    owner.run(source.id, null, System.currentTimeMillis())
+                }
+            }
+            LibraryIndexRepository(dao).load()
         }
         catalogState.replace(input)
         refreshCatalog()

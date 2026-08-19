@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.net.Uri
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Binder
@@ -71,6 +72,7 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
     private var pendingSeekToken: Long? = null
     private var pendingSeekDeadlineMs = 0L
     private var currentScriptHeatmap: ScriptHeatmap? = null
+    private lateinit var indexedScriptResolver: IndexedScriptResolver
     private var playbackObserver: ((Diagnostics) -> Unit)? = null
     private lateinit var playbackCoordinator: DevicePlaybackCoordinator
     private val scriptTick = object : Runnable {
@@ -122,6 +124,7 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
             } else {
                 loadCommittedLibrary(mediaId)
             }
+            loadIndexedScript(mediaId)
             controller.startPlayback()
             publishDiagnostics()
         }
@@ -215,6 +218,11 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
         mainHandler.post(uiTick)
         engine.setEventListener { event -> mainHandler.post { handlePlayerEvent(event) } }
         indexDatabase = FPlayerIndexDatabase.open(this)
+        indexedScriptResolver = IndexedScriptResolver(
+            IndexedScriptByteReader(
+                openContent = { value -> contentResolver.openInputStream(Uri.parse(value)) },
+            ),
+        )
         mediaSession = MediaSession(this, TAG).apply {
             setCallback(object : MediaSession.Callback() {
                 override fun onPlay() { this@PlaybackService.controller.startPlayback() }
@@ -308,11 +316,42 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
         if (destroyed) return
         val request = ++queueLoadRequest
         indexExecutor.execute {
-            val items = indexDatabase.indexDao().currentMediaLibrarySnapshot().map { media ->
+            val dao = indexDatabase.indexDao()
+            val items = dao.currentMediaLibrarySnapshot().map { media ->
                 FeedMedia(MediaId(media.id), MediaLocator(media.locator))
             }
             mainHandler.post {
                 if (!destroyed && request == queueLoadRequest) applyQueue(items, selected)
+            }
+        }
+    }
+
+    private fun loadIndexedScript(mediaId: MediaId) {
+        val request = mediaId.value
+        indexExecutor.execute {
+            val dao = indexDatabase.indexDao()
+            val media = dao.currentMedia(request)
+            val scripts = dao.currentScriptsForMedia(request).map { script ->
+                IndexedScriptResolver.IndexedScript(
+                    locator = script.locator,
+                    normalizedBasename = script.normalizedBasename,
+                    axis = script.axis,
+                )
+            }
+            val match = media?.let {
+                indexedScriptResolver.resolve(it.displayName, scripts)
+            }
+            mainHandler.post {
+                if (destroyed || playbackSession.snapshot().current?.id?.value != request) return@post
+                val bundle = match?.bundle
+                if (bundle == null) {
+                    currentScriptHeatmap = null
+                    playbackCoordinator.clear(StopReason.SCRIPT_CHANGED)
+                } else {
+                    currentScriptHeatmap = bundleHeatmap(bundle)
+                    playbackCoordinator.load(bundle)
+                }
+                publishDiagnostics()
             }
         }
     }
