@@ -2,7 +2,9 @@ package io.github.fplayer.core.script
 
 import io.github.fplayer.core.device.DeviceController
 import io.github.fplayer.core.device.DeviceTarget
+import io.github.fplayer.core.device.AxisLimit
 import io.github.fplayer.core.device.StopReason
+import io.github.fplayer.core.model.AxisId
 import io.github.fplayer.core.player.PlayerSnapshot
 import kotlin.math.ceil
 import kotlin.math.min
@@ -28,6 +30,8 @@ data class ScriptSchedulerConfig(
     val lookAheadMediaMs: Long = 100,
     val maxCommandDurationMs: Long = 500,
     val slice: PlaybackSlice? = null,
+    val scriptOutputLimits: ScriptOutputLimits = ScriptOutputLimits(),
+    val deviceOutputLimits: Map<AxisId, AxisLimit> = emptyMap(),
 ) {
     init {
         require(lookAheadMediaMs > 0)
@@ -46,12 +50,14 @@ enum class PlaybackDiscontinuity(
 class MediaClockScriptScheduler(
     private val clock: PlaybackClock,
     private val controller: DeviceController,
+    private val automaticOffsetProvider: () -> Long = { 0L },
 ) {
     private var bundle: ScriptBundle? = null
     private var config = ScriptSchedulerConfig()
     private var generation = 0L
     private var active = false
     private var lastSpeed: Double? = null
+    private val lastSubmittedMediaTimeByAxis = mutableMapOf<AxisId, Long>()
 
     val currentGeneration: Long get() = generation
 
@@ -62,6 +68,7 @@ class MediaClockScriptScheduler(
         this.config = config
         active = false
         lastSpeed = null
+        lastSubmittedMediaTimeByAxis.clear()
     }
 
     fun onDiscontinuity(discontinuity: PlaybackDiscontinuity) {
@@ -78,6 +85,7 @@ class MediaClockScriptScheduler(
         bundle = null
         active = false
         lastSpeed = null
+        lastSubmittedMediaTimeByAxis.clear()
     }
 
     fun tick() {
@@ -113,26 +121,58 @@ class MediaClockScriptScheduler(
         }
 
         val futureMediaTime = futureMediaTime(snapshot, slice)
-        val scriptTime = mapToScriptTime(futureMediaTime, slice, config.offsetMs)
+        val effectiveOffsetMs = saturatedAdd(config.offsetMs, automaticOffsetProvider())
+        val scriptTime = mapToScriptTime(futureMediaTime, slice, effectiveOffsetMs)
         if (scriptTime < 0) return
         val durationMs = commandDuration(snapshot.positionMs, futureMediaTime, snapshot.speed)
 
-        var submitted = false
-        currentBundle.tracks.toSortedMap(compareBy { it.value }).forEach { (axis, track) ->
-            val position = ScriptInterpolator.positionAt(track, scriptTime) ?: return@forEach
-            controller.submit(
-                DeviceTarget(
-                    axis = axis,
-                    position = position,
-                    durationMs = durationMs,
-                    generation = generation,
-                    mediaTimeMs = futureMediaTime,
-                ),
+        val targets = currentBundle.tracks.toSortedMap(compareBy { it.value }).mapNotNull { (axis, track) ->
+            val position = ScriptInterpolator.positionAt(track, scriptTime) ?: return@mapNotNull null
+            DeviceTarget(
+                axis = axis,
+                position = effectivePosition(axis, position),
+                durationMs = durationMs,
+                generation = generation,
+                mediaTimeMs = futureMediaTime,
             )
-            submitted = true
         }
+        targets.forEach(controller::submit)
+        targets.forEach { lastSubmittedMediaTimeByAxis[it.axis] = it.mediaTimeMs }
+        val submitted = targets.isNotEmpty()
         active = submitted
         lastSpeed = snapshot.speed
+    }
+
+    fun submitManual(target: ManualAxisTarget, allowWhenPaused: Boolean = false): Boolean {
+        if (bundle == null) return false
+        val snapshot = clock.snapshot()
+        if ((!snapshot.isPlaying || snapshot.isBuffering) && !allowWhenPaused) return false
+        val mediaTimeMs = maxOf(
+            snapshot.positionMs.coerceAtLeast(0L),
+            lastSubmittedMediaTimeByAxis[target.axis] ?: 0L,
+        )
+        val durationMs = target.durationMs.coerceIn(1L, config.maxCommandDurationMs)
+        val deviceTarget = DeviceTarget(
+            axis = target.axis,
+            position = effectivePosition(target.axis, target.position),
+            durationMs = durationMs,
+            generation = generation,
+            mediaTimeMs = mediaTimeMs,
+        )
+        controller.submit(deviceTarget)
+        lastSubmittedMediaTimeByAxis[target.axis] = mediaTimeMs
+        return true
+    }
+
+    private fun effectivePosition(axis: AxisId, position: Int): Int {
+        val scriptRange = config.scriptOutputLimits.rangeFor(axis)
+        val deviceRange = config.deviceOutputLimits[axis]
+        return if (deviceRange == null) {
+            applyScriptRange(position, scriptRange)
+        } else {
+            val intersection = intersectAxisRanges(scriptRange, deviceRange)
+            position.coerceIn(intersection.minimum, intersection.maximum)
+        }
     }
 
     private fun futureMediaTime(snapshot: PlayerSnapshot, slice: PlaybackSlice?): Long {
@@ -168,6 +208,7 @@ class MediaClockScriptScheduler(
         controller.stop(reason)
         active = false
         lastSpeed = null
+        lastSubmittedMediaTimeByAxis.clear()
     }
 
     private fun saturatedAdd(left: Long, right: Long): Long = try {
