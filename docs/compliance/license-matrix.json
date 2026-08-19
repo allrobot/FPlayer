@@ -1,0 +1,15 @@
+{
+  "entries": [],
+  "generation_inputs": {
+    "gradle_report": "build/reports/t32/gradle-resolution.json",
+    "native_evidence": "native-build/out-arm64/evidence",
+    "native_lock": "native-build/sources.lock.json"
+  },
+  "lock_id": "fplayer-native-arm64-gpl-v1",
+  "reason": "Required sanitized Gradle resolution report is unavailable; no dependency entries were invented.",
+  "required_evidence": [
+    "build/reports/t32/gradle-resolution.json"
+  ],
+  "schema_version": 1,
+  "status": "BLOCKED"
+}
