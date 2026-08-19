@@ -60,6 +60,8 @@ public final class RealSmbInstrumentedAcceptanceTest {
                     username != null && !username.isBlank()
                             && passwordValue != null && !passwordValue.isEmpty());
             int expectedScripts = integerArgument(arguments, "expected_scripts", 0, 2_000);
+            int expectedMatchedScripts = integerArgument(
+                    arguments, "expected_matched_scripts", 0, 2_000);
             String credentialRef = null;
             password = passwordValue.toCharArray();
             CredentialStore.SmbCredential credential =
@@ -98,7 +100,7 @@ public final class RealSmbInstrumentedAcceptanceTest {
                 assertEquals(expectedMedia, committed.scan.mediaCount);
                 assertEquals(expectedScripts, committed.scan.scriptCount);
                 assertEquals(expectedMedia, dao.currentMediaCount(SOURCE_ID));
-                assertMatchedScripts(dao, expectedScripts);
+                assertMatchedScripts(dao, expectedMatchedScripts);
             }
 
             phase = "CONNECTION_CUT";
@@ -138,7 +140,7 @@ public final class RealSmbInstrumentedAcceptanceTest {
                 assertEquals(expectedScripts, recovered.scan.scriptCount);
                 assertEquals(Long.valueOf(3L), dao.source(SOURCE_ID).currentScanGeneration);
                 assertEquals(expectedMedia, dao.currentMediaCount(SOURCE_ID));
-                assertMatchedScripts(dao, expectedScripts);
+                assertMatchedScripts(dao, expectedMatchedScripts);
             }
         } catch (Throwable failure) {
             throw new AssertionError("REAL_SMB_DEVICE_ACCEPTANCE_" + phase + "_FAILED_"

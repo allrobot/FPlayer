@@ -59,6 +59,8 @@ public final class RealSmbAcceptanceTest {
             Assume.assumeTrue("REAL_SMB_ACCEPTANCE_BLOCKED_CREDENTIALS",
                     SmbAcceptanceRuntimePolicy.credentialsProvided(username, passwordValue));
             int expectedScripts = integerEnvironment("FPLAYER_T32_SMB_SCRIPT_COUNT", 0, 2_000);
+            int expectedMatchedScripts = integerEnvironment(
+                    "FPLAYER_T32_SMB_MATCHED_SCRIPT_COUNT", 0, 2_000);
             String credentialRef = null;
             password = passwordValue.toCharArray();
             CredentialStore.SmbCredential credential =
@@ -96,7 +98,7 @@ public final class RealSmbAcceptanceTest {
                 assertEquals(expectedMedia, committed.scan.mediaCount);
                 assertEquals(expectedScripts, committed.scan.scriptCount);
                 assertEquals(expectedMedia, dao.currentMediaCount(SOURCE_ID));
-                assertMatchedScripts(dao, expectedScripts);
+                assertMatchedScripts(dao, expectedMatchedScripts);
             }
 
             phase = "CONNECTION_CUT";
@@ -136,7 +138,7 @@ public final class RealSmbAcceptanceTest {
                 assertEquals(expectedScripts, recovered.scan.scriptCount);
                 assertEquals(Long.valueOf(3L), dao.source(SOURCE_ID).currentScanGeneration);
                 assertEquals(expectedMedia, dao.currentMediaCount(SOURCE_ID));
-                assertMatchedScripts(dao, expectedScripts);
+                assertMatchedScripts(dao, expectedMatchedScripts);
             }
         } catch (Throwable failure) {
             throw new AssertionError("REAL_SMB_ACCEPTANCE_" + phase + "_FAILED_"
