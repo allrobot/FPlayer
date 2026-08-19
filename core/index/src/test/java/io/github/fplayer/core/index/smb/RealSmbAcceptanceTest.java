@@ -192,7 +192,12 @@ public final class RealSmbAcceptanceTest {
 
         @Override public List<Entry> children(Entry directory) throws IOException {
             List<Entry> children = delegate.children(directory);
-            if (firstListing.compareAndSet(true, false)) proxy.cutConnections();
+            if (firstListing.compareAndSet(true, false)) {
+                proxy.cutConnections();
+                // A flat share may have no later directory read to observe the cut.
+                // Surface the interrupted operation deterministically after closing the proxy.
+                throw new IOException("SMB_CONNECTION_CUT");
+            }
             return children;
         }
     }

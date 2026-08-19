@@ -75,14 +75,14 @@ public final class SmbScannerTest {
         assertEquals(1, dao.currentMediaCount("smb-source"));
     }
 
-    @Test public void ioFailureResultIsRedactedAndPreservesCommittedSnapshot() throws IOException {
+    @Test public void ioFailureAfterRootListingIsRedactedAndPreservesCommittedSnapshot() throws IOException {
         SmbSourceConfig config = SmbSourceConfig.defaults("smb-source", "NAS", "nas", "media", "cred");
         SmbScanner scanner = new SmbScanner(dao, () -> 2L);
         assertEquals(SmbScanner.SmbScanResult.State.ONLINE,
                 scanner.scan(config, 1L, new FixtureTree(true), LocalSafScanner.Cancellation.NEVER).state);
 
         SmbScanner.SmbScanResult failed = scanner.scan(
-                config, 2L, new IOExceptionTree(), LocalSafScanner.Cancellation.NEVER);
+                config, 2L, new FlatDisconnectingTree(), LocalSafScanner.Cancellation.NEVER);
 
         assertEquals(SmbScanner.SmbScanResult.State.FAILED, failed.state);
         assertEquals("SMB_IO_FAILED", failed.failureCode);
@@ -114,9 +114,13 @@ public final class SmbScannerTest {
         }
     }
 
-    private static final class IOExceptionTree implements SmbDocumentTree {
+    private static final class FlatDisconnectingTree implements SmbDocumentTree {
+        private final Entry root = new Entry("root", "smb://fixture/root", "Root",
+                "vnd.android.document/directory", true, null, null);
         @Override public boolean isOnline() { return true; }
-        @Override public Entry root() throws IOException { throw new IOException("synthetic failure"); }
-        @Override public List<Entry> children(Entry directory) { return List.of(); }
+        @Override public Entry root() { return root; }
+        @Override public List<Entry> children(Entry directory) throws IOException {
+            throw new IOException("synthetic connection cut");
+        }
     }
 }
