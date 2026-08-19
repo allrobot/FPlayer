@@ -4,6 +4,7 @@ import io.github.fplayer.core.index.MaterializedOrder
 import io.github.fplayer.core.index.SortDirection
 import io.github.fplayer.core.index.SortField
 import io.github.fplayer.core.index.SortSpec
+import io.github.fplayer.core.model.MediaId
 
 /** Metadata rendered by the feed; playback ownership remains in [PlaybackSession]. */
 data class PlaybackFeedItem(
@@ -34,7 +35,10 @@ sealed interface FeedPagingEvent {
     data class Move(val dxPx: Float, val dyPx: Float) : FeedPagingEvent
     data class Up(val velocityX: Float = 0f, val velocityY: Float = 0f) : FeedPagingEvent
     data class Settle(val progress: Float) : FeedPagingEvent
-    data class ReplaceItems(val items: List<PlaybackFeedItem>) : FeedPagingEvent
+    data class ReplaceItems(
+        val items: List<PlaybackFeedItem>,
+        val selectedMediaId: MediaId? = null,
+    ) : FeedPagingEvent
 }
 
 /**
@@ -56,8 +60,10 @@ class PlaybackFeedReducer(
             is FeedPagingEvent.Up -> pager.onUp(event.velocityX, event.velocityY)
             is FeedPagingEvent.Settle -> pager.onSettleProgress(event.progress)
             is FeedPagingEvent.ReplaceItems -> {
-                pager.setPageCount(event.items.size)
-                val active = event.items.indices.firstOrNull()
+                val active = event.items.indexOfFirst { it.media.id == event.selectedMediaId }
+                    .takeIf { it >= 0 }
+                    ?: event.items.indices.firstOrNull()
+                pager.setPageCount(event.items.size, active ?: 0)
                 if (sessionController != null) {
                     val ids = event.items.map { it.media.id }
                     sessionController.setItems(event.items.map { it.media })
@@ -70,6 +76,7 @@ class PlaybackFeedReducer(
                                 mediaIds = ids,
                             ),
                         )
+                        if (event.selectedMediaId != null) active?.let(sessionController::select)
                     }
                 }
                 next = state.copy(

@@ -402,7 +402,8 @@ private fun FPlayerApp(
                         catalogSearchSignal += 1
                         destinationName = AppDestination.LIBRARY.name
                     },
-                    onSelectMedia = onSelectMedia,
+                    selectedMediaId = catalogSnapshot.currentMediaId,
+                    onSelectMedia = { mediaId -> selectMedia(mediaId) },
                     onPlaybackToggle = onPlaybackToggle,
                     observePlayback = observePlayback,
                     onSeekRequested = onSeekRequested,
@@ -468,6 +469,7 @@ private fun PlaybackFeedScreen(
     onOpenGrid: () -> Unit,
     onOpenDrawer: () -> Unit,
     onOpenSearch: () -> Unit,
+    selectedMediaId: io.github.fplayer.core.model.MediaId?,
     onSelectMedia: (io.github.fplayer.core.model.MediaId) -> Unit,
     onPlaybackToggle: () -> Unit,
     observePlayback: (((PlaybackService.Diagnostics) -> Unit)?) -> Unit,
@@ -507,8 +509,11 @@ private fun PlaybackFeedScreen(
     LaunchedEffect(serviceEpoch, feedItems, feedState.activeIndex) {
         feedState.activeIndex?.let(feedItems::getOrNull)?.let { onSelectMedia(it.media.id) }
     }
-    LaunchedEffect(feedItems) {
-        feedState = feedReducer.reduce(feedState, FeedPagingEvent.ReplaceItems(feedItems))
+    LaunchedEffect(feedItems, selectedMediaId) {
+        feedState = feedReducer.reduce(
+            feedState,
+            FeedPagingEvent.ReplaceItems(feedItems, selectedMediaId),
+        )
     }
     DisposableEffect(serviceEpoch, observePlayback) {
         observePlayback { diagnostics ->

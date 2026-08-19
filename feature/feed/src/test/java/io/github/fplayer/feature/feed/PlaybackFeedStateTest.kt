@@ -30,6 +30,27 @@ class PlaybackFeedStateTest {
     }
 
     @Test
+    fun replacementHonorsExplicitCurrentMedia() {
+        val reducer = PlaybackFeedReducer(1_000f)
+        var state = reducer.reduce(
+            PlaybackFeedState(),
+            FeedPagingEvent.ReplaceItems(items, selectedMediaId = MediaId("b")),
+        )
+
+        assertEquals(1, state.activeIndex)
+        assertEquals(1, state.settledIndex)
+        assertEquals(1, state.paging.pageIndex)
+
+        state = reducer.reduce(state, FeedPagingEvent.Down)
+        state = reducer.reduce(state, FeedPagingEvent.Move(0f, -300f))
+        state = reducer.reduce(state, FeedPagingEvent.Up())
+        state = reducer.reduce(state, FeedPagingEvent.Settle(1f))
+
+        assertEquals(2, state.activeIndex)
+        assertEquals(2, state.paging.pageIndex)
+    }
+
+    @Test
     fun promotionHappensOnlyAfterSettleCompletionAndLeavesOneActiveItem() {
         val reducer = PlaybackFeedReducer(1_000f)
         var state = reducer.reduce(PlaybackFeedState(), FeedPagingEvent.ReplaceItems(items))

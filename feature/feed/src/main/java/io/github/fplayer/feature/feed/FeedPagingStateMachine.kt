@@ -59,9 +59,9 @@ class FeedPagingStateMachine(
 
     init { require(pageExtentPx > 0f) }
 
-    fun setPageCount(count: Int) {
+    fun setPageCount(count: Int, pageIndex: Int = pageIndexValue) {
         pageCountValue = count.coerceAtLeast(0)
-        pageIndexValue = pageIndexValue.coerceIn(0, (pageCountValue - 1).coerceAtLeast(0))
+        pageIndexValue = pageIndex.coerceIn(0, (pageCountValue - 1).coerceAtLeast(0))
         activePageValue = pageIndexValue.takeIf { pageCountValue > 0 }
         reset()
     }
