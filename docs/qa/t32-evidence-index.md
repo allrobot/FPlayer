@@ -17,7 +17,7 @@ This index stores only repository-relative evidence, stable logical resource ide
 | `T32-PLAN-SCRIPT` | `SCRIPT-LATENCY` | Script latency and range plan | Exact latency, range, scheduler and settings tasks | `docs/superpowers/plans/2026-08-19-t32-funscript-latency.md` |
 | `T32-PLAN-DEVICE` | `DEVICE-*`, `MEDIA-*`, `SMB-REAL` | Device and media plan | Loopback-first, SAF, authenticated SMB, physical safety and cleanup tasks | `docs/superpowers/plans/2026-08-19-t32-device-media-acceptance.md` |
 | `T32-PLAN-RELEASE` | `RELEASE-*` | Release compliance plan | License, attribution, privacy, reproducibility and signing tasks | `docs/superpowers/plans/2026-08-19-t32-release-compliance.md` |
-| `T32-SMB-REAL-20260820` | `SMB-REAL` | Runtime-gated authenticated host acceptance | Pass; online committed scan, aggregate matching, controlled I/O interruption, failed work generation and prior snapshot retention; runtime credential deleted | `docs/qa/t32-device-media-acceptance.md` |
+| `T32-SMB-REAL-20260820` | `SMB-REAL` | Runtime-gated SMB acceptance review | Pass for both authorized roots: root A `28/28/28` and root B `8/38/8` media/total-scripts/matched-scripts; genuine socket interruption, generation-3 recovery and credential cleanup passed. Tablet instrumentation remains blocked without `TEST_TABLET`. | `docs/qa/t32-device-media-acceptance.md` |
 
 ## Count Authority
 

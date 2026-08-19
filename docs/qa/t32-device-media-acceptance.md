@@ -16,15 +16,16 @@ This report contains aggregate, redacted evidence only. Runtime endpoints, crede
 | Field | Result |
 | --- | --- |
 | Logical source | `FUNSCRIPT_TEST_LIBRARY` |
-| Authentication | PASS; runtime-only credential store path |
-| Initial scan | PASS; online result and committed generation |
-| Video/script matching | PASS; expected aggregate media count and same-stem matching |
-| Controlled connection cut | PASS; failed generation reports `SMB_IO_FAILED` |
-| Snapshot retention | PASS; prior committed generation and aggregate count remain current |
-| Credential cleanup | PASS; in-memory credential cleared and deleted after the run |
-| Evidence policy | PASS; no runtime endpoint, credential, locator or media filename persisted |
+| Authentication | PASS; missing credentials are blocked and both roots ran through the credentialed path |
+| Initial scan | PASS; both roots reached online committed generations |
+| Video/script matching | PASS; root A aggregate `28/28/28`, root B aggregate `8/38/8` for media/total scripts/same-stem matches |
+| Controlled connection cut | PASS; the real proxy closes before the first listing and SMBJ observes the socket interruption without an injected exception |
+| Snapshot retention | PASS; generation 2 failed/incomplete while generation 1 remained current |
+| Recovery generation | PASS; reconnecting the direct credentialed source committed generation 3 |
+| Credential cleanup | PASS; runtime secret buffer and credential-store entry were cleared after each run |
+| Evidence policy | PASS; only aggregate counts and logical identifiers are retained; non-secret locator/auth-reference assertions are confined to the in-memory test database |
 
-The first real run exposed a test-fixture defect: closing a proxy after a complete flat-root listing did not necessarily interrupt a later SMB operation. The acceptance fixture now closes the proxy and raises a deterministic I/O interruption at the first listing boundary, preserving the product-level generation/rollback assertion without relying on directory shape.
+The first real run exposed a test-fixture defect: closing a proxy after a complete flat-root listing did not necessarily interrupt a later SMB operation. The fixture now closes the proxy before the first delegated listing and relies on the production SMBJ operation to observe the socket interruption; the injected flat-tree failure remains a separate unit regression. Both authorized roots passed the corrected host gate.
 
 ## TEST_TABLET Media
 
