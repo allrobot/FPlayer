@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "gates": [
+    {
+      "id": "RELEASE-LICENSE",
+      "status": "BLOCKED",
+      "evidence": ["docs/compliance/license-matrix.json", "docs/release/release-gates.md"],
+      "reason": "The license matrix is BLOCKED and has no complete dependency entries or required evidence.",
+      "cleanup": ["No task-specific license staging files were retained."]
+    },
+    {
+      "id": "RELEASE-REPRO",
+      "status": "BLOCKED",
+      "evidence": ["docs/release/reproducible-build.md", "native-build/sources.lock.json"],
+      "reason": "No annotated release tag and no approved production application identity are available for a clean release rebuild.",
+      "cleanup": ["Generated build outputs were removed after verification."]
+    },
+    {
+      "id": "RELEASE-SIGN",
+      "status": "BLOCKED",
+      "evidence": ["docs/release/signing.md", "docs/release/release-gates.md"],
+      "reason": "No approved production signing identity or organization/application identity is present; the debug key cannot satisfy this gate.",
+      "cleanup": ["No signing key, credential, or signing staging file was created or retained."]
+    },
+    {
+      "id": "RELEASE-HYGIENE",
+      "status": "FAIL",
+      "evidence": ["native-build/scan-release-hygiene.py", "native-build/tests/test_release_compliance.py"],
+      "reason": "The scan found one absolute-path category in tracked governance text and nine untracked-native-binary findings under ignored generated JNI output. No matched text or file contents are retained.",
+      "cleanup": ["Ignored generated JNI output remains for a later safe cleanup; no release artifact is claimed."]
+    },
+    {
+      "id": "RELEASE-TAG",
+      "status": "BLOCKED",
+      "evidence": ["docs/release/release-gates.md"],
+      "reason": "No annotated release tag exists for a clean tag checkout and rebuild.",
+      "cleanup": ["No tag or isolated checkout was created."]
+    },
+    {
+      "id": "RELEASE-DEVICE",
+      "status": "BLOCKED",
+      "evidence": ["docs/security/test-device-policy.md", "docs/qa/t32-acceptance-matrix.md"],
+      "reason": "The approved production device/profile prerequisite and physical release-device run are absent.",
+      "cleanup": ["No device connection, playback, or motion output was initiated."]
+    }
+  ]
+}

@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,6 +20,16 @@ SPEC.loader.exec_module(MODULE)
 
 ASSEMBLER = Path(__file__).resolve().parents[1] / "assemble-notices.py"
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _load_hygiene_scanner():
+    scanner = ROOT / "native-build" / "scan-release-hygiene.py"
+    spec = importlib.util.spec_from_file_location("scan_release_hygiene", scanner)
+    if spec is None or spec.loader is None:  # pragma: no cover - import contract
+        raise ImportError(f"cannot load {scanner}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _load_assembler():
@@ -323,6 +334,145 @@ class DocumentationTests(unittest.TestCase):
             for pattern in forbidden:
                 with self.subTest(path=path.name, pattern=pattern.pattern):
                     self.assertIsNone(pattern.search(text))
+
+
+class HygieneScannerTests(unittest.TestCase):
+    """The scanner must reject release-tree leakage without echoing secrets."""
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        subprocess.run(
+            ["git", "init", "--quiet", "--initial-branch", "fixture"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.module = _load_hygiene_scanner()
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def _write(self, relative: str, contents: str | bytes) -> None:
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(contents, bytes):
+            path.write_bytes(contents)
+        else:
+            path.write_text(contents, encoding="utf-8")
+
+    def _track(self, *relative: str) -> None:
+        subprocess.run(["git", "add", "--", *relative], cwd=self.root, check=True)
+
+    def test_rejects_sensitive_text_and_untracked_artifacts(self) -> None:
+        credential = "pass" + "word" + "=" + '"synthetic-secret"'
+        absolute_path = "Q" + ":" + "\\private\\fixture.txt"
+        private_key = "-----BEGIN " + "PRIVATE KEY-----"
+        device_address = "10" + ".42.0.9"
+        bluetooth_address = ":".join(("12", "34", "56", "78", "9A", "BC"))
+        serial_port = "C" + "OM42"
+        media_name = '"private-title 2026.' + "mkv" + '"'
+        self._write(
+            "tracked.txt",
+            "\n".join(
+                (
+                    credential,
+                    absolute_path,
+                    private_key,
+                    device_address,
+                    bluetooth_address,
+                    serial_port,
+                    media_name,
+                )
+            ),
+        )
+        self._track("tracked.txt")
+        self._write("untracked." + "apk", b"PK\x03\x04fixture")
+        self._write("native." + "so", b"\x7fELFfixture")
+        self._write("leftover.tmp.t32", "temporary")
+
+        findings = self.module.scan_release_hygiene(self.root)
+        categories = {finding.category for finding in findings}
+        self.assertTrue(
+            {
+                "credential",
+                "absolute-path",
+                "private-key",
+                "device-address",
+                "serial-port",
+                "media-filename",
+                "untracked-binary",
+                "temporary-file",
+            }.issubset(categories)
+        )
+        diagnostics = self.module.format_diagnostics(findings)
+        self.assertNotIn("synthetic-secret", diagnostics)
+        self.assertNotIn(device_address, diagnostics)
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", finding.digest) for finding in findings))
+
+    def test_logical_test_identifiers_and_selected_results_are_allowed(self) -> None:
+        self._write(
+            "README.md",
+            "TEST_TABLET TEST_OSR_DEVICE TEST_OSR_WIFI FUNSCRIPT_TEST_LIBRARY\n",
+        )
+        self._track("README.md")
+        self._write(
+            "docs/qa/t32-release-compliance-report.md",
+            "RELEASE-LICENSE: BLOCKED\nRELEASE-HYGIENE: PASS\n",
+        )
+        self._write(
+            "docs/release/release-gate-result.json",
+            '{"schema_version": 1, "gates": []}\n',
+        )
+
+        findings = self.module.scan_release_hygiene(
+            self.root,
+            allow=(
+                "docs/qa/t32-release-compliance-report.md",
+                "docs/release/release-gate-result.json",
+            ),
+        )
+        self.assertEqual([], findings)
+
+    def test_selected_result_with_leak_is_still_rejected(self) -> None:
+        self._write(
+            "docs/qa/t32-release-compliance-report.md",
+            "token" + "=" + '"synthetic-secret"\n',
+        )
+        findings = self.module.scan_release_hygiene(
+            self.root,
+            allow=("docs/qa/t32-release-compliance-report.md",),
+        )
+        self.assertIn("credential", {finding.category for finding in findings})
+
+    def test_source_constructs_and_neutral_fixture_names_are_allowed(self) -> None:
+        self._write(
+            "source.kt",
+            "\n".join(
+                (
+                    'val passwordValue = System.getenv("FPLAYER_T32_SMB_PASSWORD")',
+                    "val token = state.onPointerUp()!!",
+                    "policy path /data/data is intentionally documented",
+                    '<component name="fixture" version="3.41.2.2">',
+                    'const val media = "t31-synthetic.mp4"',
+                )
+            ),
+        )
+        self._track("source.kt")
+        self.assertEqual([], self.module.scan_release_hygiene(self.root))
+
+    def test_rejects_key_material_and_tracked_binary_but_skips_build_cache(self) -> None:
+        self._write("release-signing.jks", b"fixture-key-material")
+        self._write("tracked.aar", b"fixture-library")
+        self._track("release-signing.jks", "tracked.aar")
+        self._write("build/cache.apk", b"generated-cache")
+
+        findings = self.module.scan_release_hygiene(self.root)
+        categories = {finding.category for finding in findings}
+        self.assertIn("key-material", categories)
+        self.assertIn("binary-artifact", categories)
+        self.assertNotIn("untracked-binary", categories)
 
 
 if __name__ == "__main__":
