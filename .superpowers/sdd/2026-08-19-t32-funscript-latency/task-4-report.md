@@ -81,3 +81,18 @@ JAVA_HOME=<JDK17> gradlew :core:device:testDebugUnitTest --tests '*NetworkDevice
 BUILD SUCCESSFUL in 55s
 NetworkDeviceTransportsTest: 12; ScriptLatencyRecordingIntegrationTest: 4; DevicePlaybackCoordinatorTest: 2; DeviceSessionTest: 10; ManualAxisOutputIntegrationTest: 2
 ```
+
+Coordinator close race fix:
+
+- Coordinator teardown now owns a latch-backed serialized boundary. `closed` is set only after scheduler/controller teardown completes; lifecycle operations arriving during teardown wait for that boundary and cannot fall back to the session executor. Regular scheduler submissions are rejected under the same state lock once closing begins.
+- Added a blocked-stop regression covering concurrent `close`, `runControllerOperation`, and `releaseController`; the operation is handled after teardown without running or overlapping on another executor.
+
+Final focused command with JDK 17:
+
+```text
+JAVA_HOME=<JDK17> gradlew :core:device:testDebugUnitTest --tests '*NetworkDeviceTransportsTest' :core:script:testDebugUnitTest --tests '*ScriptLatencyRecordingIntegrationTest' :feature:device:testDebugUnitTest --tests '*DevicePlaybackCoordinatorTest' --tests '*DeviceSessionTest' --tests '*ManualAxisOutputIntegrationTest' --rerun-tasks --no-daemon --max-workers=1
+BUILD SUCCESSFUL in 54s
+NetworkDeviceTransportsTest: 12; ScriptLatencyRecordingIntegrationTest: 4; DevicePlaybackCoordinatorTest: 3; DeviceSessionTest: 10; ManualAxisOutputIntegrationTest: 2
+Total: 31 tests, 0 failures, 0 errors, 0 skipped
+git diff --check: PASS
+```
