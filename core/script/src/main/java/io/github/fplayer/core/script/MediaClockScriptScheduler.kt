@@ -45,6 +45,7 @@ enum class PlaybackDiscontinuity(
     SEEK(StopReason.PLAYBACK_SEEK),
     LOOP(StopReason.PLAYBACK_LOOP),
     SLICE_CHANGE(StopReason.SLICE_CHANGED),
+    SPEED_CHANGED(StopReason.PLAYBACK_SPEED_CHANGED),
 }
 
 class MediaClockScriptScheduler(

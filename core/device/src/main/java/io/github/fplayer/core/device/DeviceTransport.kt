@@ -31,6 +31,11 @@ fun interface TransportReceiver {
     fun onBytesReceived(bytes: ByteArray)
 }
 
+/** A validated monotonic send/receive pair from a correlated transport response. */
+fun interface TransportTimingListener {
+    fun onRoundTripSample(sentAtMonotonicMs: Long, receivedAtMonotonicMs: Long)
+}
+
 data class TransportConfig(
     val connectTimeoutMs: Int = 1_000,
     val writeTimeoutMs: Int = 1_000,
@@ -51,6 +56,9 @@ interface DeviceTransport : DeviceFrameSink, Closeable {
     val diagnostics: String
     fun connect()
     fun disconnect()
+
+    /** Installs a response-sample sink; transports must never infer samples from writes. */
+    fun setTimingListener(listener: TransportTimingListener?) = Unit
 }
 
 internal data class QueuedFrame(val bytes: ByteArray, val priority: DeviceFramePriority)

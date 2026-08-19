@@ -10,11 +10,13 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
 import java.nio.charset.StandardCharsets
+import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
@@ -24,6 +26,7 @@ abstract class QueuedDeviceTransport(
     private val listener: TransportListener?,
     protected val receiver: TransportReceiver? = null,
 ) : DeviceTransport {
+    @Volatile private var timingListener: TransportTimingListener? = null
     private val queue = BoundedFrameQueue(config.maximumPendingFrames)
     @Volatile private var transportState = TransportState.DISCONNECTED
     @Volatile private var worker: Thread? = null
@@ -39,6 +42,16 @@ abstract class QueuedDeviceTransport(
     override val state: TransportState get() = transportState
     override val pendingFrameCount: Int get() = queue.size()
     override val diagnostics: String get() = "$label state=${transportState.name.lowercase()} pending=${queue.size()}"
+
+    override fun setTimingListener(listener: TransportTimingListener?) {
+        timingListener = listener
+    }
+
+    /** Adapter implementations call this only for a correlated response/echo. */
+    protected fun emitRoundTripSample(sentAtMonotonicMs: Long, receivedAtMonotonicMs: Long) {
+        if (sentAtMonotonicMs < 0L || receivedAtMonotonicMs < sentAtMonotonicMs) return
+        timingListener?.onRoundTripSample(sentAtMonotonicMs, receivedAtMonotonicMs)
+    }
 
     protected abstract fun openConnection()
     protected abstract fun writeFrame(frame: ByteArray)
@@ -299,14 +312,20 @@ class RawWebSocketDeviceTransport(
     config: TransportConfig = TransportConfig(),
     listener: TransportListener? = null,
     receiver: TransportReceiver? = null,
+    private val monotonicClockMs: () -> Long = { System.nanoTime() / 1_000_000L },
 ) : QueuedDeviceTransport("websocket", config, listener, receiver) {
     @Volatile private var socket: Socket? = null
     @Volatile private var input: BufferedInputStream? = null
     @Volatile private var output: BufferedOutputStream? = null
     private var frameLock = Any()
+    private val timingProbeIds = AtomicLong(0L)
+    private val pendingTimingProbes = mutableMapOf<Long, Long>()
+    @Volatile private var lastTimingProbeMs = Long.MIN_VALUE
     init { require(port in 1..65535); require(path.startsWith('/')); require(path.length <= 256) }
     override val diagnostics: String get() = "websocket ${if (state == TransportState.CONNECTED) "connected" else state.name.lowercase()} pending=$pendingFrameCount"
     override fun openConnection() {
+        synchronized(pendingTimingProbes) { pendingTimingProbes.clear() }
+        lastTimingProbeMs = Long.MIN_VALUE
         val s = if (secure) SSLSocketFactory.getDefault().createSocket() as SSLSocket else Socket()
         socket = s
         s.connect(InetSocketAddress(host, port), config.connectTimeoutMs)
@@ -352,7 +371,10 @@ class RawWebSocketDeviceTransport(
     override fun monitorConnection() {
         val source = input ?: return
         while (!closing) {
-            val first = try { source.read() } catch (_: SocketTimeoutException) { continue }
+            val first = try { source.read() } catch (_: SocketTimeoutException) {
+                sendTimingProbe()
+                continue
+            }
             if (first < 0) return
             val second = source.read()
             if (second < 0) return
@@ -368,9 +390,33 @@ class RawWebSocketDeviceTransport(
             if (mask != null) payload.indices.forEach { payload[it] = (payload[it].toInt() xor mask[it % 4].toInt()).toByte() }
             if (opcode == 0x8) return
             if (opcode == 0x9) sendControlFrame(0xA, payload)
+            if (opcode == 0xA) receiveTimingPong(payload)
             if (opcode == 0x1 || opcode == 0x2) receiver?.onBytesReceived(payload.copyOf())
         }
     }
+
+    private fun sendTimingProbe() {
+        val now = monotonicMs()
+        if (lastTimingProbeMs != Long.MIN_VALUE && now - lastTimingProbeMs < TIMING_PROBE_INTERVAL_MS) return
+        val id = timingProbeIds.incrementAndGet()
+        synchronized(pendingTimingProbes) {
+            pendingTimingProbes[id] = now
+            while (pendingTimingProbes.size > MAX_PENDING_TIMING_PROBES) {
+                pendingTimingProbes.remove(pendingTimingProbes.keys.first())
+            }
+        }
+        lastTimingProbeMs = now
+        sendControlFrame(0x9, ByteBuffer.allocate(8).putLong(id).array())
+    }
+
+    private fun receiveTimingPong(payload: ByteArray) {
+        if (payload.size != 8) return
+        val id = ByteBuffer.wrap(payload).long
+        val sent = synchronized(pendingTimingProbes) { pendingTimingProbes.remove(id) } ?: return
+        emitRoundTripSample(sent, monotonicMs())
+    }
+
+    private fun monotonicMs(): Long = monotonicClockMs()
     private fun sendControlFrame(opcode: Int, payload: ByteArray) {
         if (payload.size > 125) throw IOException("invalid websocket control frame")
         val mask = ByteArray(4).also { java.security.SecureRandom().nextBytes(it) }
@@ -389,7 +435,15 @@ class RawWebSocketDeviceTransport(
             offset += read
         }
     }
-    override fun closeConnection() { runCatching { socket?.close() }; runCatching { output?.close() }; runCatching { input?.close() }; output = null; input = null; socket = null }
+    override fun closeConnection() {
+        synchronized(pendingTimingProbes) { pendingTimingProbes.clear() }
+        runCatching { socket?.close() }
+        runCatching { output?.close() }
+        runCatching { input?.close() }
+        output = null
+        input = null
+        socket = null
+    }
     private fun readHeaders(input: BufferedInputStream): String {
         val bytes = ByteArrayOutputStreamCompat()
         var matched = 0
@@ -402,4 +456,9 @@ class RawWebSocketDeviceTransport(
         throw IOException("websocket handshake headers too large")
     }
     private class ByteArrayOutputStreamCompat { private val b = ArrayList<Byte>(); val size get() = b.size; fun write(v: Int) { b += v.toByte() }; fun toByteArray() = b.toByteArray() }
+
+    private companion object {
+        const val TIMING_PROBE_INTERVAL_MS = 1_000L
+        const val MAX_PENDING_TIMING_PROBES = 4
+    }
 }

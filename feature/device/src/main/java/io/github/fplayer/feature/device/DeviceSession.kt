@@ -2,8 +2,13 @@ package io.github.fplayer.feature.device
 
 import io.github.fplayer.core.device.DeviceSafetyConfig
 import io.github.fplayer.core.device.DeviceSafetyController
+import io.github.fplayer.core.device.DeviceController
 import io.github.fplayer.core.device.DeviceTarget
 import io.github.fplayer.core.device.DeviceTransport
+import io.github.fplayer.core.script.LatencyCompensationConfig
+import io.github.fplayer.core.script.LatencyEstimate
+import io.github.fplayer.core.script.LatencyEstimator
+import io.github.fplayer.core.script.LatencySample
 import io.github.fplayer.core.device.StopBehavior
 import io.github.fplayer.core.device.StopReason
 import io.github.fplayer.core.device.TransportFailure
@@ -27,6 +32,12 @@ interface DeviceBackend {
     ): DeviceTransport
 }
 
+interface DeviceSessionLifecycle {
+    fun onControllerConnected(controller: DeviceController) = Unit
+    fun onConnectionLost() = Unit
+    fun onSessionClosed() = Unit
+}
+
 sealed interface DeviceSessionEvent {
     data object DiscoveryStarted : DeviceSessionEvent
     data class DiscoveryFinished(val devices: List<DiscoveredDeviceUi>) : DeviceSessionEvent
@@ -43,6 +54,10 @@ class DeviceSession(
     private val backend: DeviceBackend,
     private val callbackExecutor: Executor,
     private val eventSink: (DeviceSessionEvent) -> Unit,
+    private val schedulerClear: (StopReason) -> Unit = {},
+    private val monotonicNowMs: () -> Long = { System.nanoTime() / 1_000_000L },
+    private val lifecycle: DeviceSessionLifecycle? = null,
+    private val timingSampleSink: (LatencyEstimate) -> Unit = {},
     private val worker: ExecutorService = Executors.newFixedThreadPool(2) { task ->
         Thread(task, "device-ui-session").also { it.isDaemon = true }
     },
@@ -53,6 +68,12 @@ class DeviceSession(
     private val lock = Any()
     private var transport: DeviceTransport? = null
     private var controller: DeviceSafetyController? = null
+    private val latencyEstimator = LatencyEstimator(LatencyCompensationConfig())
+
+    @Synchronized
+    fun latencyEstimate(): LatencyEstimate = synchronized(latencyEstimator) {
+        latencyEstimator.estimate(monotonicNowMs())
+    }
 
     fun discover(transportType: TransportType) {
         emit(DeviceSessionEvent.DiscoveryStarted)
@@ -121,6 +142,23 @@ class DeviceSession(
                     }
                 }
                 created = backend.createTransport(request, listener)
+                created.setTimingListener { sentAtMonotonicMs, receivedAtMonotonicMs ->
+                    val estimate = runCatching {
+                        synchronized(latencyEstimator) {
+                            latencyEstimator.recordSample(LatencySample(sentAtMonotonicMs, receivedAtMonotonicMs))
+                        }
+                    }.getOrNull() ?: return@setTimingListener
+                    emit(
+                        DeviceSessionEvent.Diagnostic(
+                            DeviceDiagnostic(
+                                code = "LATENCY_${estimate.state.name}",
+                                message = "state=${estimate.state.name.lowercase()} samples=${estimate.sampleCount} " +
+                                    "medianRttMs=${estimate.medianRoundTripMs ?: 0L} offsetMs=${estimate.automaticOffsetMs}",
+                            ),
+                        ),
+                    )
+                    timingSampleSink(estimate)
+                }
                 synchronized(lock) { transport = created }
                 created.connect()
                 if (epoch != operationEpoch.get()) {
@@ -136,6 +174,7 @@ class DeviceSession(
                     created,
                 ).also(DeviceSafetyController::connect)
                 synchronized(lock) { controller = safetyController }
+                lifecycle?.onControllerConnected(safetyController)
                 emit(
                     DeviceSessionEvent.ConnectionChanged(
                         DeviceConnectionStatus.CONNECTED,
@@ -251,6 +290,7 @@ class DeviceSession(
         testEpoch.incrementAndGet()
         testRunning.set(false)
         closeActiveConnection()
+        lifecycle?.onSessionClosed()
         worker.shutdownNow()
     }
 
@@ -263,7 +303,10 @@ class DeviceSession(
             controller = null
             transport = null
         }
-        runCatching { activeController?.disconnect() }
+        synchronized(latencyEstimator) { latencyEstimator.reset() }
+        schedulerClear(StopReason.CONNECTION_LOST)
+        lifecycle?.onConnectionLost()
+        runCatching { activeController?.onConnectionLost() }
         runCatching { activeController?.close() }
         runCatching { activeTransport?.disconnect() }
         runCatching { activeTransport?.close() }
@@ -278,6 +321,9 @@ class DeviceSession(
                 controller = null
             }
         }
+        synchronized(latencyEstimator) { latencyEstimator.reset() }
+        schedulerClear(StopReason.CONNECTION_LOST)
+        lifecycle?.onConnectionLost()
         if (wasTesting) emit(DeviceSessionEvent.TestProgress(running = false))
     }
 

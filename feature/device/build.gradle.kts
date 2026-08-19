@@ -21,6 +21,7 @@ android {
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:device"))
+    implementation(project(":core:script"))
 
     implementation(libs.activity.compose)
     implementation(platform(libs.compose.bom))

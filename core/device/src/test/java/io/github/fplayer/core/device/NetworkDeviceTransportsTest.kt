@@ -18,9 +18,35 @@ import java.util.Base64
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import io.github.fplayer.core.model.AxisId
 
 class NetworkDeviceTransportsTest {
+    @Test
+    fun `websocket correlated ping pong reports monotonic response sample`() {
+        WebSocketLoopback().use { server ->
+            val samples = mutableListOf<Pair<Long, Long>>()
+            val received = CountDownLatch(1)
+            val clockIndex = AtomicInteger()
+            val clockValues = longArrayOf(100L, 220L)
+            val transport = RawWebSocketDeviceTransport(
+                loopback(),
+                server.port,
+                config = TransportConfig(writeTimeoutMs = 50),
+                monotonicClockMs = { clockValues[clockIndex.getAndIncrement().coerceAtMost(1)] },
+            )
+            transport.setTimingListener { sentAt, receivedAt ->
+                synchronized(samples) { samples += sentAt to receivedAt }
+                received.countDown()
+            }
+
+            transport.connect()
+
+            assertTrue(received.await(2, TimeUnit.SECONDS))
+            assertEquals(listOf(100L to 220L), synchronized(samples) { samples.toList() })
+            transport.close()
+        }
+    }
     @Test
     fun `tcp sends frames detects remote close and reconnects without replay`() {
         TcpLoopback().use { server ->
@@ -315,7 +341,15 @@ class NetworkDeviceTransportsTest {
                 val mask = ByteArray(4); input.readFully(mask)
                 val payload = ByteArray(length); input.readFully(payload)
                 payload.indices.forEach { payload[it] = (payload[it].toInt() xor mask[it % 4].toInt()).toByte() }
-                frames += payload.toString(StandardCharsets.US_ASCII)
+                val opcode = first and 0x0f
+                if (opcode == 0x9) {
+                    output.write(0x8A)
+                    output.write(payload.size)
+                    output.write(payload)
+                    output.flush()
+                } else {
+                    frames += payload.toString(StandardCharsets.US_ASCII)
+                }
             }
         }
         fun takeText(): String = frames.poll(2, TimeUnit.SECONDS) ?: throw AssertionError("WebSocket frame timed out")

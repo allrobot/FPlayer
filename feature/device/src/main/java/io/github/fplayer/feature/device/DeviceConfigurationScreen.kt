@@ -99,7 +99,10 @@ sealed interface DeviceUiAction {
 }
 
 @Composable
-fun DeviceConfigurationRoute(modifier: Modifier = Modifier) {
+fun DeviceConfigurationRoute(
+    modifier: Modifier = Modifier,
+    coordinator: DevicePlaybackCoordinator = DevicePlaybackCoordinatorRegistry.currentOrCreate(),
+) {
     val context = LocalContext.current
     var state by rememberSaveable(stateSaver = DeviceUiStateSaver) { mutableStateOf(DeviceUiState()) }
     var pendingPermissionAction by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -111,6 +114,8 @@ fun DeviceConfigurationRoute(modifier: Modifier = Modifier) {
             backend = AndroidDeviceBackend(context),
             callbackExecutor = mainExecutor,
             eventSink = { event -> state = state.reduce(event) },
+            lifecycle = coordinator,
+            timingSampleSink = coordinator::onTimingEstimate,
         )
     }
     DisposableEffect(session) {

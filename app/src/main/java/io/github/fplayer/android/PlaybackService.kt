@@ -32,7 +32,15 @@ import io.github.fplayer.core.model.MediaLocator
 import io.github.fplayer.core.player.PlaybackRequest
 import io.github.fplayer.core.player.PlayerEngine
 import io.github.fplayer.core.player.PlayerEvent
+import io.github.fplayer.core.script.PlaybackClock
+import io.github.fplayer.core.script.PlaybackDiscontinuity
+import io.github.fplayer.core.script.ManualAxisTarget
+import io.github.fplayer.core.script.ScriptBundle
+import io.github.fplayer.core.script.ScriptSchedulerConfig
+import io.github.fplayer.core.device.StopReason
 import io.github.fplayer.player.mpv.LibMpvPlayer
+import io.github.fplayer.feature.device.DevicePlaybackCoordinator
+import io.github.fplayer.feature.device.DevicePlaybackCoordinatorRegistry
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -52,6 +60,14 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
     private var preparedEventCount = 0L
     private var completedEventCount = 0L
     private var failedEventCount = 0L
+    private lateinit var playbackCoordinator: DevicePlaybackCoordinator
+    private val scriptTick = object : Runnable {
+        override fun run() {
+            if (destroyed) return
+            playbackCoordinator.tick()
+            mainHandler.postDelayed(this, SCRIPT_TICK_INTERVAL_MS)
+        }
+    }
 
     data class Diagnostics(
         val preparedEvents: Long,
@@ -66,6 +82,7 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
         fun setActivityVisible(visible: Boolean) = controller.onActivityVisibilityChanged(visible)
         fun refreshLibrary() = loadCommittedLibrary()
         fun selectMedia(mediaId: MediaId) {
+            playbackCoordinator.onDiscontinuity(PlaybackDiscontinuity.SEEK)
             if (playbackSession.snapshot().order?.mediaIds?.contains(mediaId) == true) {
                 playbackSession.select(mediaId)
             } else {
@@ -73,7 +90,23 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
             }
             controller.startPlayback()
         }
-        fun setLooping(enabled: Boolean) = playbackSession.setLooping(enabled)
+        fun setLooping(enabled: Boolean) {
+            playbackCoordinator.onDiscontinuity(PlaybackDiscontinuity.LOOP)
+            playbackSession.setLooping(enabled)
+        }
+        fun seekTo(positionMs: Long) {
+            playbackCoordinator.onDiscontinuity(PlaybackDiscontinuity.SEEK)
+            engine.seekTo(positionMs)
+        }
+        fun setSpeed(speed: Float) {
+            playbackCoordinator.onDiscontinuity(PlaybackDiscontinuity.SPEED_CHANGED)
+            engine.setSpeed(speed.toDouble())
+        }
+        fun loadScript(bundle: ScriptBundle, config: ScriptSchedulerConfig = ScriptSchedulerConfig()) {
+            playbackCoordinator.load(bundle, config)
+        }
+        fun sendManualAxis(target: ManualAxisTarget, allowWhenPaused: Boolean = false): Boolean =
+            playbackCoordinator.submitManual(target, allowWhenPaused)
         fun play() = controller.startPlayback()
         fun pause() = controller.pausePlayback()
         fun stopDevices() = controller.stopDevices()
@@ -106,6 +139,10 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
         controller = BackgroundPlaybackController(this)
         engine = LibMpvPlayer(this)
         playbackSession = PlaybackSession(SingleEngineSlotFactory(engine))
+        playbackCoordinator = DevicePlaybackCoordinatorRegistry.install(
+            PlaybackClock { engine.snapshot() },
+        )
+        mainHandler.post(scriptTick)
         engine.setEventListener { event -> mainHandler.post { handlePlayerEvent(event) } }
         indexDatabase = FPlayerIndexDatabase.open(this)
         mediaSession = MediaSession(this, TAG).apply {
@@ -143,7 +180,13 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
 
     override fun onDestroy() {
         destroyed = true
+        mainHandler.removeCallbacks(scriptTick)
         if (::controller.isInitialized) controller.onServiceDestroyed()
+        if (::playbackCoordinator.isInitialized) {
+            playbackCoordinator.clear(StopReason.SERVICE_DESTROYED)
+            playbackCoordinator.close()
+            DevicePlaybackCoordinatorRegistry.remove(playbackCoordinator)
+        }
         if (::playbackSession.isInitialized) playbackSession.close()
         if (::engine.isInitialized) engine.release()
         if (::mediaSession.isInitialized) mediaSession.release()
@@ -160,10 +203,21 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
         super.onTaskRemoved(rootIntent)
     }
 
-    override fun pauseMedia() { playbackSession.pause(); updatePlaybackState(PlaybackState.STATE_PAUSED) }
+    override fun pauseMedia() {
+        playbackCoordinator.clear(StopReason.PLAYBACK_PAUSED)
+        playbackSession.pause()
+        updatePlaybackState(PlaybackState.STATE_PAUSED)
+    }
     override fun resumeMedia() { playbackSession.play(); updatePlaybackState(PlaybackState.STATE_PLAYING) }
-    override fun stopDevices() { updateNotification() }
-    override fun stopPlayback() { releasePlaybackResources(); updatePlaybackState(PlaybackState.STATE_NONE) }
+    override fun stopDevices() {
+        playbackCoordinator.clear(StopReason.USER)
+        updateNotification()
+    }
+    override fun stopPlayback() {
+        playbackCoordinator.clear(StopReason.SERVICE_DESTROYED)
+        releasePlaybackResources()
+        updatePlaybackState(PlaybackState.STATE_NONE)
+    }
     override fun acquirePlaybackResources() {
         if (wakeLock == null) {
             val power = getSystemService(PowerManager::class.java)
@@ -218,6 +272,7 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
                 CompletionDisposition.LOOP_RELOADING, CompletionDisposition.ADVANCED -> completedEventCount += 1
                 CompletionDisposition.ENDED -> {
                     completedEventCount += 1
+                    playbackCoordinator.onPlaybackEnded()
                     controller.pausePlayback()
                 }
             }
@@ -292,6 +347,7 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
         private const val TAG = "FPlayerPlayback"
         private const val CHANNEL_ID = "fplayer.playback"
         private const val NOTIFICATION_ID = 1001
+        private const val SCRIPT_TICK_INTERVAL_MS = 50L
         const val ACTION_START = "io.github.fplayer.android.action.START"
         const val ACTION_PLAY = "io.github.fplayer.android.action.PLAY"
         const val ACTION_PAUSE = "io.github.fplayer.android.action.PAUSE"
