@@ -75,6 +75,7 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
         val failedEvents: Long,
         val currentMediaId: String?,
         val positionMs: Long,
+        val durationMs: Long?,
         val isPlaying: Boolean,
     )
 
@@ -129,6 +130,7 @@ class PlaybackService : Service(), BackgroundPlaybackCallbacks {
                 failedEventCount,
                 playbackSession.snapshot().current?.id?.value,
                 player.positionMs,
+                player.durationMs,
                 player.isPlaying,
             )
         }

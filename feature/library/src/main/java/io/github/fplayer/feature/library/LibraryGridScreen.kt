@@ -48,6 +48,7 @@ fun LibraryGridScreen(
     onJumpConsumed: () -> Unit,
     onJumpToJustWatched: () -> Unit,
     thumbnailKey: (LibraryGridItem) -> String? = { null },
+    thumbnailLoader: (String) -> LibraryThumbnailState = { LibraryThumbnailState.Error },
     modifier: Modifier = Modifier,
 ) {
     require(adaptiveGridColumns >= 3)
@@ -94,6 +95,7 @@ fun LibraryGridScreen(
                                 snapshot.justWatchedMediaId == item.mediaId,
                             showMetadata = snapshot.layout == LibraryLayout.DOUBLE_COLUMN,
                             thumbnailKey = thumbnailKey(item),
+                            thumbnailLoader = thumbnailLoader,
                             onClick = { onOpenMedia(item) },
                         )
                     }
@@ -181,6 +183,7 @@ private fun MediaGridTile(
     isCurrentOrJustWatched: Boolean,
     showMetadata: Boolean,
     thumbnailKey: String?,
+    thumbnailLoader: (String) -> LibraryThumbnailState,
     onClick: () -> Unit,
 ) {
     Column(
@@ -192,11 +195,10 @@ private fun MediaGridTile(
                 .clip(MaterialTheme.shapes.small)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
-            Icon(
-                Icons.Outlined.SmartDisplay,
-                contentDescription = thumbnailKey?.let { "视频缩略图" } ?: "视频预览占位",
-                modifier = Modifier.align(Alignment.Center),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            LibraryThumbnail(
+                key = thumbnailKey,
+                loader = thumbnailLoader,
+                modifier = Modifier.fillMaxSize(),
             )
             if (item.hasScript) {
                 Text(

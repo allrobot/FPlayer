@@ -2,7 +2,9 @@ package io.github.fplayer.feature.feed
 
 import io.github.fplayer.core.model.AxisId
 import io.github.fplayer.core.model.ScriptAction
+import io.github.fplayer.core.script.AxisHeatmap
 import io.github.fplayer.core.script.HeatmapWindow
+import io.github.fplayer.core.script.ScriptHeatmap
 import io.github.fplayer.core.script.ScriptBundle
 import io.github.fplayer.core.script.ScriptHeatmapDownsampler
 import io.github.fplayer.core.script.ScriptTrack
@@ -50,6 +52,20 @@ class ProgressHeatmapRendererTest {
         )
         assertEquals(ProgressInteractionMode.BAR, rendered.mode)
         assertEquals(0.25f, rendered.progress, 0.001f)
+        assertTrue(rendered.traces.isEmpty())
+    }
+
+    @Test
+    fun heatmapWithOnlyEmptyAxesFallsBackToBarMode() {
+        val empty = ScriptHeatmap(
+            HeatmapWindow(0, 1_000),
+            mapOf(AxisId("L0") to AxisHeatmap(AxisId("L0"), emptyList(), 0)),
+        )
+        val rendered = ProgressHeatmapRenderer.build(
+            empty,
+            ProgressInteractionStateMachine(1_000, 500, ProgressInteractionMode.HEATMAP).snapshot(),
+        )
+        assertEquals(ProgressInteractionMode.BAR, rendered.mode)
         assertTrue(rendered.traces.isEmpty())
     }
 

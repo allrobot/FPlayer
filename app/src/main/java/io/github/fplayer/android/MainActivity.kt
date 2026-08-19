@@ -8,6 +8,7 @@ import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
+import android.graphics.BitmapFactory
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -23,6 +24,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.Canvas
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.ArrowBack
@@ -62,9 +65,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.fplayer.feature.device.DeviceConfigurationRoute
 import io.github.fplayer.core.index.saf.SafPermissionStore
@@ -81,6 +89,10 @@ import io.github.fplayer.feature.feed.PlaybackFeedState
 import io.github.fplayer.feature.feed.PlaybackFeedItem
 import io.github.fplayer.feature.feed.FeedMedia
 import io.github.fplayer.feature.feed.PlaybackOverlayLayout
+import io.github.fplayer.feature.feed.PlaybackProgressBinding
+import io.github.fplayer.feature.feed.ProgressHeatmapRenderer
+import io.github.fplayer.feature.feed.ProgressInteractionSnapshot
+import io.github.fplayer.feature.feed.ProgressInteractionMode
 import io.github.fplayer.feature.feed.LongPressPlaybackSettingsStateMachine
 import io.github.fplayer.feature.library.HomeSurface
 import io.github.fplayer.feature.library.LibraryContentFilter
@@ -93,12 +105,14 @@ import io.github.fplayer.feature.library.LibraryCatalogInput
 import io.github.fplayer.feature.library.LibraryCatalogScreen
 import io.github.fplayer.feature.library.LibraryCatalogStateMachine
 import io.github.fplayer.feature.library.LibraryIndexRepository
+import io.github.fplayer.feature.library.LibraryThumbnailState
 import io.github.fplayer.feature.settings.ScriptPlaybackSettingsState
 import io.github.fplayer.feature.settings.ScriptPlaybackSettingsStateSaver
 import io.github.fplayer.feature.settings.ScriptPlaybackSettingsSurface
 import io.github.fplayer.feature.settings.reduce
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 
 open class MainActivity : ComponentActivity() {
     private var playbackBinder: PlaybackService.LocalBinder? = null
@@ -131,6 +145,8 @@ open class MainActivity : ComponentActivity() {
             MaterialTheme(colorScheme = FPlayerColors) {
                 FPlayerApp(
                     onSelectMedia = { mediaId -> playbackBinder?.selectMedia(mediaId) },
+                    playbackDiagnostics = { playbackBinder?.diagnostics() },
+                    onSeekRequested = { positionMs -> playbackBinder?.seekTo(positionMs) },
                 )
             }
         }
@@ -178,7 +194,15 @@ private enum class AppDestination(val label: String) {
 @Composable
 private fun FPlayerApp(
     onSelectMedia: (io.github.fplayer.core.model.MediaId) -> Unit,
+    playbackDiagnostics: () -> PlaybackService.Diagnostics?,
+    onSeekRequested: (Long) -> Unit,
 ) {
+    val thumbnailLoader: (String) -> LibraryThumbnailState = remember {
+        { key ->
+            val bitmap = BitmapFactory.decodeFile(key)?.asImageBitmap()
+            if (bitmap == null) LibraryThumbnailState.Error else LibraryThumbnailState.Ready(bitmap)
+        }
+    }
     var destinationName by rememberSaveable { mutableStateOf(AppDestination.HOME.name) }
     val destination = AppDestination.valueOf(destinationName)
     val context = LocalContext.current
@@ -278,6 +302,8 @@ private fun FPlayerApp(
                     onJumpToJustWatched = {
                         libraryJumpTarget = libraryState.jumpToJustWatched()
                     },
+                    thumbnailKey = { null },
+                    thumbnailLoader = thumbnailLoader,
                     modifier = Modifier.padding(contentPadding),
                 )
                 HomeSurface.DEFAULT_FEED, HomeSurface.FOLDER_PLAYBACK -> PlaybackFeedScreen(
@@ -304,6 +330,8 @@ private fun FPlayerApp(
                         catalogSearchSignal += 1
                         destinationName = AppDestination.LIBRARY.name
                     },
+                    playbackDiagnostics = playbackDiagnostics,
+                    onSeekRequested = onSeekRequested,
                 )
             }
             AppDestination.LIBRARY -> LibraryCatalogScreen(
@@ -335,6 +363,8 @@ private fun FPlayerApp(
                 },
                 openDrawerSignal = catalogDrawerSignal,
                 openSearchSignal = catalogSearchSignal,
+                thumbnailKey = { media -> media.path },
+                thumbnailLoader = thumbnailLoader,
                 modifier = Modifier.padding(contentPadding),
             )
             AppDestination.DEVICE -> DeviceConfigurationRoute(Modifier.padding(contentPadding))
@@ -362,13 +392,40 @@ private fun PlaybackFeedScreen(
     onOpenGrid: () -> Unit,
     onOpenDrawer: () -> Unit,
     onOpenSearch: () -> Unit,
+    playbackDiagnostics: () -> PlaybackService.Diagnostics?,
+    onSeekRequested: (Long) -> Unit,
 ) {
     var overlay by rememberSaveable(stateSaver = PlaybackOverlaySaver) { mutableStateOf(PlaybackOverlayState()) }
     var feedState by remember { mutableStateOf(PlaybackFeedState()) }
     val feedReducer = remember { PlaybackFeedReducer(pageExtentPx = 1_000f) }
     val overlayLayout = remember { PlaybackOverlayLayout() }
+    var pendingSeekConfirmation by remember { mutableStateOf<Pair<Long, Long>?>(null) }
+    val progressBinding = remember {
+        PlaybackProgressBinding(durationMs = 0) { positionMs, token ->
+            onSeekRequested(positionMs)
+            pendingSeekConfirmation = token to positionMs
+        }
+    }
+    var progressSnapshot by remember { mutableStateOf(progressBinding.snapshot()) }
     LaunchedEffect(feedItems) {
         feedState = feedReducer.reduce(feedState, FeedPagingEvent.ReplaceItems(feedItems))
+    }
+    LaunchedEffect(playbackDiagnostics) {
+        while (true) {
+            playbackDiagnostics()?.let { diagnostics ->
+                progressBinding.updateMediaClock(
+                    positionMs = diagnostics.positionMs,
+                    durationMs = diagnostics.durationMs ?: 0L,
+                )
+                pendingSeekConfirmation?.let { (token, positionMs) ->
+                    if (progressBinding.onSeekConfirmed(token, positionMs)) {
+                        pendingSeekConfirmation = null
+                    }
+                }
+                progressSnapshot = progressBinding.snapshot()
+            }
+            delay(250L)
+        }
     }
     val context = LocalContext.current
     val playbackSettingsState = remember { LongPressPlaybackSettingsStateMachine() }
@@ -483,22 +540,26 @@ private fun PlaybackFeedScreen(
                 Text("${overlay.speed}x", color = Color.White)
             }
         }
-        Box(
+        PlaybackProgressSurface(
+            snapshot = progressSnapshot,
+            interactionHeightDp = overlayLayout.controlTouchTargetDp,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = (overlayLayout.progressHeightDp + 44).dp)
-                .height(overlayLayout.progressHeightDp.dp)
-                .background(Color.White.copy(alpha = 0.22f)),
-        ) {
-            val progress = feedState.activeIndex?.let { index ->
-                feedItems.getOrNull(index)?.media?.let { 0f }
-            } ?: 0f
-            Box(
-                Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).fillMaxSize()
-                    .background(MaterialTheme.colorScheme.primary),
-            )
-        }
+                .padding(start = 12.dp, end = 12.dp, bottom = 56.dp),
+            onPointerDown = {
+                progressBinding.onPointerDown()
+                progressSnapshot = progressBinding.snapshot()
+            },
+            onPointerMove = { progress ->
+                progressBinding.onPointerMove(progress)
+                progressSnapshot = progressBinding.snapshot()
+            },
+            onPointerUp = {
+                progressBinding.onPointerUp()
+                progressSnapshot = progressBinding.snapshot()
+            },
+        )
         if (overlay.deviceStopped) {
             Text(
                 "设备已停止",
@@ -506,6 +567,67 @@ private fun PlaybackFeedScreen(
                 color = MaterialTheme.colorScheme.error,
             )
         }
+    }
+}
+
+@Composable
+private fun PlaybackProgressSurface(
+    snapshot: ProgressInteractionSnapshot,
+    interactionHeightDp: Int,
+    modifier: Modifier = Modifier,
+    onPointerDown: () -> Unit,
+    onPointerMove: (Float) -> Unit,
+    onPointerUp: () -> Unit,
+) {
+    var widthPx by remember { mutableStateOf(1) }
+    var pointerX by remember { mutableStateOf(0f) }
+    val renderModel = ProgressHeatmapRenderer.build(heatmap = null, snapshot = snapshot)
+    val primary = MaterialTheme.colorScheme.primary
+    val previewSeconds = snapshot.previewPositionMs / 1_000
+    val durationSeconds = snapshot.durationMs / 1_000
+    Box(
+        modifier = modifier
+            .height(interactionHeightDp.dp)
+            .semantics { contentDescription = "播放进度 $previewSeconds / $durationSeconds 秒" }
+            .onSizeChanged { widthPx = it.width.coerceAtLeast(1) }
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        pointerX = offset.x.coerceIn(0f, widthPx.toFloat())
+                        onPointerDown()
+                        onPointerMove(pointerX / widthPx)
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        pointerX = (pointerX + dragAmount.x).coerceIn(0f, widthPx.toFloat())
+                        onPointerMove(pointerX / widthPx)
+                    },
+                    onDragEnd = onPointerUp,
+                    onDragCancel = onPointerUp,
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val y = size.height / 2f
+            drawLine(
+                color = Color.White.copy(alpha = 0.22f),
+                start = Offset(0f, y),
+                end = Offset(size.width, y),
+                strokeWidth = 4.dp.toPx(),
+            )
+            drawLine(
+                color = primary,
+                start = Offset(0f, y),
+                end = Offset(size.width * renderModel.progress, y),
+                strokeWidth = 4.dp.toPx(),
+            )
+        }
+        Text(
+            "$previewSeconds / $durationSeconds",
+            color = Color.White,
+            style = MaterialTheme.typography.labelSmall,
+        )
     }
 }
 
