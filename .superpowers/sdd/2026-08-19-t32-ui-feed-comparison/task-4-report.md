@@ -1,6 +1,6 @@
 # Task 4 Review Fix Round 1 Report
 
-Status: DONE_WITH_EXTERNAL_BUILD_BLOCKER
+Status: DONE_WITH_OPEN_INTEGRATION_GAPS
 
 ## Changes
 
@@ -20,6 +20,25 @@ Status: DONE_WITH_EXTERNAL_BUILD_BLOCKER
   ```powershell
   .\gradlew.bat :feature:feed:testDebugUnitTest --tests '*PlaybackProgressBindingTest' --tests '*PlaybackSeekCoordinatorTest' --no-configuration-cache --rerun-tasks --max-workers=1 --dependency-verification=off
   ```
+
+## Follow-up Review Fix
+
+- `da99cd2 fix: preserve selected media in feed` ensures a catalog or folder-grid selection
+  initializes the Feed at that media rather than replacing it with item zero. Feed paging now
+  keeps the catalog's current-media context in sync, and the reducer test covers selection of a
+  non-first item followed by a page change.
+
+## Open Integration Findings
+
+- The thumbnail UI consumes committed cache keys, but the Android app has no production
+  `MetadataThumbnailPipeline` owner that writes to the cache root read by the UI. A valid key can
+  therefore still render the error state until that producer/root contract is implemented.
+- Surface teardown remains dependent on the `SurfaceHolder` callback after the activity unbinds.
+  Background playback needs an explicit service-owned detach handoff to avoid retaining an old
+  MPV surface during lifecycle races.
+- The heatmap is published when `PlaybackService.loadScript()` receives a bundle, but normal
+  library selection does not yet resolve and load a matching script. Library playback therefore
+  continues to use the bar fallback unless another caller loads a script.
 
 ## External Build Blocker
 
