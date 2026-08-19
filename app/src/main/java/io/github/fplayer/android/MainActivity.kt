@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.ArrowBack
@@ -79,6 +80,7 @@ import io.github.fplayer.feature.feed.PlaybackFeedReducer
 import io.github.fplayer.feature.feed.PlaybackFeedState
 import io.github.fplayer.feature.feed.PlaybackFeedItem
 import io.github.fplayer.feature.feed.FeedMedia
+import io.github.fplayer.feature.feed.PlaybackOverlayLayout
 import io.github.fplayer.feature.feed.LongPressPlaybackSettingsStateMachine
 import io.github.fplayer.feature.library.HomeSurface
 import io.github.fplayer.feature.library.LibraryContentFilter
@@ -364,6 +366,7 @@ private fun PlaybackFeedScreen(
     var overlay by rememberSaveable(stateSaver = PlaybackOverlaySaver) { mutableStateOf(PlaybackOverlayState()) }
     var feedState by remember { mutableStateOf(PlaybackFeedState()) }
     val feedReducer = remember { PlaybackFeedReducer(pageExtentPx = 1_000f) }
+    val overlayLayout = remember { PlaybackOverlayLayout() }
     LaunchedEffect(feedItems) {
         feedState = feedReducer.reduce(feedState, FeedPagingEvent.ReplaceItems(feedItems))
     }
@@ -479,6 +482,22 @@ private fun PlaybackFeedScreen(
             TextButton(onClick = { dispatch(PlaybackOverlayAction.CycleSpeed) }) {
                 Text("${overlay.speed}x", color = Color.White)
             }
+        }
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = (overlayLayout.progressHeightDp + 44).dp)
+                .height(overlayLayout.progressHeightDp.dp)
+                .background(Color.White.copy(alpha = 0.22f)),
+        ) {
+            val progress = feedState.activeIndex?.let { index ->
+                feedItems.getOrNull(index)?.media?.let { 0f }
+            } ?: 0f
+            Box(
+                Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).fillMaxSize()
+                    .background(MaterialTheme.colorScheme.primary),
+            )
         }
         if (overlay.deviceStopped) {
             Text(

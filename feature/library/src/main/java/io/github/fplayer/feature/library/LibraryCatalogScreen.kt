@@ -86,6 +86,7 @@ fun LibraryCatalogScreen(
     modifier: Modifier = Modifier,
     openDrawerSignal: Int = 0,
     openSearchSignal: Int = 0,
+    thumbnailKey: (LibraryCatalogMedia) -> String? = { null },
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -208,6 +209,7 @@ fun LibraryCatalogScreen(
                 onOpenFolder = onOpenFolder,
                 onOpenMedia = onOpenMedia,
                 onRequestDelete = onRequestDelete,
+                thumbnailKey = thumbnailKey,
             )
         }
         }
@@ -230,6 +232,7 @@ private fun CatalogBody(
     onOpenFolder: (LibraryCatalogFolder) -> Unit,
     onOpenMedia: (LibraryCatalogMedia) -> Unit,
     onRequestDelete: (MediaId) -> Unit,
+    thumbnailKey: (LibraryCatalogMedia) -> String?,
 ) {
     val showFolders = snapshot.collection == LibraryCollection.ALL && snapshot.albumView != LibraryAlbumView.ALL_VIDEOS
     if ((showFolders && snapshot.folders.isEmpty()) || (!showFolders && snapshot.media.isEmpty())) {
@@ -258,6 +261,7 @@ private fun CatalogBody(
                     media = media,
                     current = snapshot.currentMediaId == media.mediaId,
                     showMetadata = snapshot.layout == LibraryLayout.DOUBLE_COLUMN,
+                    thumbnailKey = thumbnailKey(media),
                     onOpen = { onOpenMedia(media) },
                     onDelete = { onRequestDelete(media.mediaId) },
                 )
@@ -291,6 +295,7 @@ private fun CatalogMediaTile(
     media: LibraryCatalogMedia,
     current: Boolean,
     showMetadata: Boolean,
+    thumbnailKey: String?,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -299,7 +304,11 @@ private fun CatalogMediaTile(
             Modifier.fillMaxWidth().aspectRatio(3f / 2f).clip(MaterialTheme.shapes.small)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
-            Icon(Icons.Outlined.SmartDisplay, contentDescription = null, modifier = Modifier.align(Alignment.Center))
+            Icon(
+                Icons.Outlined.SmartDisplay,
+                contentDescription = thumbnailKey?.let { "视频缩略图" } ?: "视频预览占位",
+                modifier = Modifier.align(Alignment.Center),
+            )
             if (media.hasScript) Text("脚本", modifier = Modifier.align(Alignment.TopStart).padding(6.dp), color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
             IconButton(onClick = onDelete, modifier = Modifier.align(Alignment.TopEnd)) {
                 Icon(Icons.Outlined.DeleteOutline, contentDescription = "删除 ${media.title}")
