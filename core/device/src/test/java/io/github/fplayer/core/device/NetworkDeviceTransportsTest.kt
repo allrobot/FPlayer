@@ -47,6 +47,25 @@ class NetworkDeviceTransportsTest {
             transport.close()
         }
     }
+
+    @Test
+    fun `websocket timing probes continue during chatty inbound traffic`() {
+        WebSocketLoopback().use { server ->
+            val received = CountDownLatch(1)
+            val transport = RawWebSocketDeviceTransport(
+                loopback(),
+                server.port,
+                config = TransportConfig(writeTimeoutMs = 50),
+            )
+            transport.setTimingListener { _, _ -> received.countDown() }
+
+            transport.connect()
+            server.startChattyFrames()
+
+            assertTrue(received.await(3, TimeUnit.SECONDS))
+            transport.close()
+        }
+    }
     @Test
     fun `tcp sends frames detects remote close and reconnects without replay`() {
         TcpLoopback().use { server ->
@@ -321,13 +340,16 @@ class NetworkDeviceTransportsTest {
     private inner class WebSocketLoopback : AutoCloseable {
         private val server = ServerSocket(0, 1, InetAddress.getLoopbackAddress())
         private val frames = LinkedBlockingQueue<String>()
+        private val outputLock = Any()
         @Volatile private var client: Socket? = null
+        @Volatile private var output: BufferedOutputStream? = null
         @Volatile var lastFrameWasMasked = false
         val port get() = server.localPort
         init { Thread(::serve, "ws-loopback").also { it.isDaemon = true; it.start() } }
         private fun serve() {
             val socket = server.accept(); client = socket
             val input = BufferedInputStream(socket.getInputStream()); val output = BufferedOutputStream(socket.getOutputStream())
+            this.output = output
             val headers = readHeaders(input)
             val key = headers.lines().first { it.startsWith("Sec-WebSocket-Key:", true) }.substringAfter(':').trim()
             val accept = Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-1").digest((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").toByteArray(StandardCharsets.US_ASCII)))
@@ -343,14 +365,32 @@ class NetworkDeviceTransportsTest {
                 payload.indices.forEach { payload[it] = (payload[it].toInt() xor mask[it % 4].toInt()).toByte() }
                 val opcode = first and 0x0f
                 if (opcode == 0x9) {
-                    output.write(0x8A)
-                    output.write(payload.size)
-                    output.write(payload)
-                    output.flush()
+                    synchronized(outputLock) {
+                        output.write(0x8A)
+                        output.write(payload.size)
+                        output.write(payload)
+                        output.flush()
+                    }
                 } else {
                     frames += payload.toString(StandardCharsets.US_ASCII)
                 }
             }
+        }
+        fun startChattyFrames() {
+            Thread({
+                repeat(80) { index ->
+                    synchronized(outputLock) {
+                        output?.let { target ->
+                            val payload = "chatty-$index".toByteArray(StandardCharsets.US_ASCII)
+                            target.write(0x81)
+                            target.write(payload.size)
+                            target.write(payload)
+                            target.flush()
+                        }
+                    }
+                    Thread.sleep(25)
+                }
+            }, "ws-chatty-loop").also { it.isDaemon = true; it.start() }
         }
         fun takeText(): String = frames.poll(2, TimeUnit.SECONDS) ?: throw AssertionError("WebSocket frame timed out")
         fun sendClose() { client?.getOutputStream()?.apply { write(byteArrayOf(0x88.toByte(), 0)); flush() } }

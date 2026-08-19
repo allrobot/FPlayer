@@ -1,6 +1,7 @@
 package io.github.fplayer.feature.device
 
 import io.github.fplayer.core.device.DeviceController
+import io.github.fplayer.core.device.DeviceSafetyController
 import io.github.fplayer.core.device.StopReason
 import io.github.fplayer.core.script.LatencyEstimate
 import io.github.fplayer.core.script.LatencyCompensationConfig
@@ -95,14 +96,54 @@ class DevicePlaybackCoordinator(
     }
 
     override fun onConnectionLost() = submit {
+        // The session's release hook owns controller teardown. This callback is
+        // retained for lifecycle notification and only clears stale scheduler state.
+        if (controller != null) return@submit
         scheduler?.clear(StopReason.CONNECTION_LOST)
         scheduler?.close()
         scheduler = null
-        controller = null
         estimate = LatencyEstimate(LatencyMeasurementState.UNMEASURED, 0L, null, 0, null)
     }
 
-    override fun onSessionClosed() = onConnectionLost()
+    override fun onSessionClosed() = Unit
+
+    override fun runControllerOperation(
+        controller: DeviceController,
+        operation: (DeviceController) -> Unit,
+    ): Boolean {
+        if (closed) return false
+        var accepted = false
+        serial.submit {
+            if (this.controller === controller) {
+                operation(controller)
+                accepted = true
+            }
+        }.get()
+        return accepted
+    }
+
+    override fun releaseController(controller: DeviceController, reason: StopReason): Boolean {
+        if (closed) return false
+        var released = false
+        serial.submit {
+            if (this.controller !== controller) return@submit
+            scheduler?.clear(reason)
+            scheduler?.close()
+            runCatching {
+                when (reason) {
+                    StopReason.CONNECTION_LOST -> (controller as? DeviceSafetyController)?.onConnectionLost()
+                    else -> controller.stop(reason)
+                }
+                controller.disconnect()
+                (controller as? AutoCloseable)?.close()
+            }
+            scheduler = null
+            this.controller = null
+            estimate = LatencyEstimate(LatencyMeasurementState.UNMEASURED, 0L, null, 0, null)
+            released = true
+        }.get()
+        return released
+    }
 
     override fun close() {
         if (closed) return

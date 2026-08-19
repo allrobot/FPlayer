@@ -7,6 +7,8 @@ import io.github.fplayer.core.device.TransportFailureCode
 import io.github.fplayer.core.device.TransportListener
 import io.github.fplayer.core.device.TransportState
 import io.github.fplayer.core.device.TransportType
+import io.github.fplayer.core.player.PlayerSnapshot
+import io.github.fplayer.core.script.PlaybackClock
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
@@ -129,6 +131,89 @@ class DeviceSessionTest {
     }
 
     @Test
+    fun coordinatorSerializesSessionControllerOperationsAndRejectsPostDisconnectTestWrites() {
+        val backend = FakeBackend()
+        val coordinator = DevicePlaybackCoordinator(
+            PlaybackClock { PlayerSnapshot(null, 0L, null, 1.0, false, false) },
+        )
+        val connected = CountDownLatch(1)
+        val disconnected = CountDownLatch(1)
+        val completed = CountDownLatch(1)
+        val session = DeviceSession(
+            backend = backend,
+            callbackExecutor = Executor(Runnable::run),
+            eventSink = { event ->
+                if (event is DeviceSessionEvent.ConnectionChanged &&
+                    event.status == DeviceConnectionStatus.CONNECTED
+                ) connected.countDown()
+                if (event is DeviceSessionEvent.ConnectionChanged &&
+                    event.status == DeviceConnectionStatus.DISCONNECTED
+                ) disconnected.countDown()
+                if (event == DeviceSessionEvent.TestProgress(false)) completed.countDown()
+            },
+            lifecycle = coordinator,
+        )
+
+        session.connect(validRequest())
+        assertTrue(connected.await(2, TimeUnit.SECONDS))
+        session.runSafeTest(
+            SafeTestPlan(
+                axis = io.github.fplayer.core.model.AxisId("L0"),
+                positions = listOf(45, 55),
+                stepDelayMs = 10,
+            ),
+        )
+        assertTrue(completed.await(2, TimeUnit.SECONDS))
+        assertTrue(backend.transport.writeThreads.isNotEmpty())
+        assertTrue(backend.transport.writeThreads.all { it.contains("device-playback-serial") })
+
+        session.disconnect()
+        assertTrue(disconnected.await(2, TimeUnit.SECONDS))
+        assertEquals(TransportState.CLOSED, backend.transport.state)
+        val writesAfterDisconnect = backend.transport.writes.size
+        session.runSafeTest(
+            SafeTestPlan(
+                axis = io.github.fplayer.core.model.AxisId("L0"),
+                positions = listOf(50),
+            ),
+        )
+        Thread.sleep(100)
+        assertEquals(writesAfterDisconnect, backend.transport.writes.size)
+
+        session.close()
+        coordinator.close()
+    }
+
+    @Test
+    fun closeNotifiesConnectionLossOnlyOnceBeforeSessionClosed() {
+        val backend = FakeBackend()
+        val connectionLost = java.util.concurrent.atomic.AtomicInteger()
+        val sessionClosed = java.util.concurrent.atomic.AtomicInteger()
+        val lifecycle = object : DeviceSessionLifecycle {
+            override fun onConnectionLost() { connectionLost.incrementAndGet() }
+            override fun onSessionClosed() { sessionClosed.incrementAndGet() }
+        }
+        val connected = CountDownLatch(1)
+        val session = DeviceSession(
+            backend = backend,
+            callbackExecutor = Executor(Runnable::run),
+            eventSink = { event ->
+                if (event is DeviceSessionEvent.ConnectionChanged &&
+                    event.status == DeviceConnectionStatus.CONNECTED
+                ) connected.countDown()
+            },
+            lifecycle = lifecycle,
+        )
+
+        session.connect(validRequest())
+        assertTrue(connected.await(2, TimeUnit.SECONDS))
+        session.close()
+
+        assertEquals(1, connectionLost.get())
+        assertEquals(1, sessionClosed.get())
+    }
+
+    @Test
     fun earlyTransportCreationFailureHasStableFailureCode() {
         val backend = FakeBackend(createFailure = IllegalStateException("private backend detail"))
         val failed = CountDownLatch(1)
@@ -218,6 +303,7 @@ class DeviceSessionTest {
     ) : DeviceTransport {
         @Volatile private var transportState = TransportState.DISCONNECTED
         val writes = CopyOnWriteArrayList<Pair<String, DeviceFramePriority>>()
+        val writeThreads = CopyOnWriteArrayList<String>()
 
         override val state: TransportState get() = transportState
         override val pendingFrameCount: Int get() = 0
@@ -233,6 +319,7 @@ class DeviceSessionTest {
         override fun write(frame: ByteArray, priority: DeviceFramePriority) {
             check(transportState == TransportState.CONNECTED)
             writes += frame.toString(Charsets.UTF_8) to priority
+            writeThreads += Thread.currentThread().name
             onWrite(priority)
         }
 

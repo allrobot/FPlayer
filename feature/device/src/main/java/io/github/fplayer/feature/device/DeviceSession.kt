@@ -36,6 +36,12 @@ interface DeviceSessionLifecycle {
     fun onControllerConnected(controller: DeviceController) = Unit
     fun onConnectionLost() = Unit
     fun onSessionClosed() = Unit
+
+    /** Executes a controller operation on the lifecycle owner's serialized boundary. */
+    fun runControllerOperation(controller: DeviceController, operation: (DeviceController) -> Unit): Boolean = false
+
+    /** Releases the controller on the lifecycle owner's serialized boundary. */
+    fun releaseController(controller: DeviceController, reason: StopReason): Boolean = false
 }
 
 sealed interface DeviceSessionEvent {
@@ -66,6 +72,9 @@ class DeviceSession(
     private val testEpoch = AtomicLong(0)
     private val testRunning = AtomicBoolean(false)
     private val lock = Any()
+    private val controllerSerial: ExecutorService = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "device-controller-serial").also { it.isDaemon = true }
+    }
     private var transport: DeviceTransport? = null
     private var controller: DeviceSafetyController? = null
     private val latencyEstimator = LatencyEstimator(LatencyCompensationConfig())
@@ -223,9 +232,7 @@ class DeviceSession(
     fun emergencyStop() {
         testEpoch.incrementAndGet()
         val wasTesting = testRunning.getAndSet(false)
-        synchronized(lock) {
-            controller?.stop(StopReason.USER)
-        }
+        runControllerOperation { it.stop(StopReason.USER) }
         if (wasTesting) emit(DeviceSessionEvent.TestProgress(running = false))
         emit(
             DeviceSessionEvent.Diagnostic(
@@ -243,13 +250,12 @@ class DeviceSession(
             try {
                 plan.positions.forEachIndexed { index, position ->
                     val stepTimeMs = index * plan.stepDelayMs
-                    synchronized(lock) {
+                    val accepted = runControllerOperation {
                         check(connectionEpoch == operationEpoch.get()) { "Test was cancelled" }
                         check(activeTestEpoch == testEpoch.get()) { "Test was cancelled" }
-                        val activeController = controller
-                            ?: error("Device controller is not connected")
-                        val generation = activeController.currentGeneration
-                        activeController.submit(
+                        val safetyController = it
+                        val generation = safetyController.currentGeneration
+                        safetyController.submit(
                             DeviceTarget(
                                 axis = plan.axis,
                                 position = position,
@@ -258,12 +264,13 @@ class DeviceSession(
                                 mediaTimeMs = stepTimeMs,
                             ),
                         )
-                        activeController.drain(
+                        safetyController.drain(
                             wallTimeMs = stepTimeMs,
                             mediaTimeMs = stepTimeMs,
                             currentGeneration = generation,
                         )
                     }
+                    check(accepted) { "Device controller is not connected" }
                     if (index != plan.positions.lastIndex) Thread.sleep(plan.stepDelayMs)
                 }
             } catch (_: InterruptedException) {
@@ -289,12 +296,13 @@ class DeviceSession(
         operationEpoch.incrementAndGet()
         testEpoch.incrementAndGet()
         testRunning.set(false)
-        closeActiveConnection()
+        closeActiveConnection(reason = StopReason.SERVICE_DESTROYED)
         lifecycle?.onSessionClosed()
         worker.shutdownNow()
+        controllerSerial.shutdownNow()
     }
 
-    private fun closeActiveConnection() {
+    private fun closeActiveConnection(reason: StopReason = StopReason.CONNECTION_LOST) {
         val activeController: DeviceSafetyController?
         val activeTransport: DeviceTransport?
         synchronized(lock) {
@@ -304,10 +312,20 @@ class DeviceSession(
             transport = null
         }
         synchronized(latencyEstimator) { latencyEstimator.reset() }
-        schedulerClear(StopReason.CONNECTION_LOST)
-        lifecycle?.onConnectionLost()
-        runCatching { activeController?.onConnectionLost() }
-        runCatching { activeController?.close() }
+        schedulerClear(reason)
+        val releasedByLifecycle = activeController?.let {
+            lifecycle?.releaseController(it, reason) == true
+        } == true
+        if (!releasedByLifecycle && activeController != null) {
+            runLocalControllerOperation(activeController) {
+                it.stop(reason)
+                it.disconnect()
+                (it as? AutoCloseable)?.close()
+            }
+        }
+        if (activeController != null || activeTransport != null) {
+            lifecycle?.onConnectionLost()
+        }
         runCatching { activeTransport?.disconnect() }
         runCatching { activeTransport?.close() }
     }
@@ -315,16 +333,47 @@ class DeviceSession(
     private fun handleUnexpectedTransportTermination(candidate: DeviceTransport?) {
         testEpoch.incrementAndGet()
         val wasTesting = testRunning.getAndSet(false)
+        var detachedController: DeviceSafetyController? = null
         synchronized(lock) {
             if (transport === candidate) {
-                controller?.onConnectionLost()
+                detachedController = controller
                 controller = null
             }
         }
         synchronized(latencyEstimator) { latencyEstimator.reset() }
         schedulerClear(StopReason.CONNECTION_LOST)
-        lifecycle?.onConnectionLost()
+        val releasedByLifecycle = detachedController?.let {
+            lifecycle?.releaseController(it, StopReason.CONNECTION_LOST) == true
+        } == true
+        if (!releasedByLifecycle) {
+            runLocalControllerOperation(detachedController) {
+                (it as? DeviceSafetyController)?.onConnectionLost()
+            }
+        }
+        if (detachedController != null) lifecycle?.onConnectionLost()
         if (wasTesting) emit(DeviceSessionEvent.TestProgress(running = false))
+    }
+
+    private fun runControllerOperation(operation: (DeviceSafetyController) -> Unit): Boolean {
+        val activeController = synchronized(lock) { controller } ?: return false
+        if (lifecycle?.runControllerOperation(activeController) { operation(it as DeviceSafetyController) } == true) return true
+        var accepted = false
+        controllerSerial.submit {
+            val active = synchronized(lock) { controller }
+            if (active === activeController) {
+                operation(activeController)
+                accepted = true
+            }
+        }.get()
+        return accepted
+    }
+
+    private fun runLocalControllerOperation(
+        activeController: DeviceController?,
+        operation: (DeviceController) -> Unit,
+    ) {
+        if (activeController == null) return
+        controllerSerial.submit { runCatching { operation(activeController) } }.get()
     }
 
     private fun emit(event: DeviceSessionEvent) {

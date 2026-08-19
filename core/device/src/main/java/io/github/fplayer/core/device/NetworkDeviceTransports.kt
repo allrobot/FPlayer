@@ -14,6 +14,7 @@ import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -319,13 +320,25 @@ class RawWebSocketDeviceTransport(
     @Volatile private var output: BufferedOutputStream? = null
     private var frameLock = Any()
     private val timingProbeIds = AtomicLong(0L)
+    private val timingProbeLock = Any()
     private val pendingTimingProbes = mutableMapOf<Long, Long>()
-    @Volatile private var lastTimingProbeMs = Long.MIN_VALUE
+    private val timingProbeScheduler = Executors.newSingleThreadScheduledExecutor { task ->
+        Thread(task, "websocket-timing-probe").also { it.isDaemon = true }
+    }
+    @Volatile private var timingProbeTask: ScheduledFuture<*>? = null
+    private var timingProbeEpoch = 0L
+    private var lastTimingProbeMs = Long.MIN_VALUE
     init { require(port in 1..65535); require(path.startsWith('/')); require(path.length <= 256) }
     override val diagnostics: String get() = "websocket ${if (state == TransportState.CONNECTED) "connected" else state.name.lowercase()} pending=$pendingFrameCount"
     override fun openConnection() {
-        synchronized(pendingTimingProbes) { pendingTimingProbes.clear() }
-        lastTimingProbeMs = Long.MIN_VALUE
+        timingProbeTask?.cancel(false)
+        timingProbeTask = null
+        val probeEpoch = synchronized(timingProbeLock) {
+            timingProbeEpoch += 1
+            pendingTimingProbes.clear()
+            lastTimingProbeMs = Long.MIN_VALUE
+            timingProbeEpoch
+        }
         val s = if (secure) SSLSocketFactory.getDefault().createSocket() as SSLSocket else Socket()
         socket = s
         s.connect(InetSocketAddress(host, port), config.connectTimeoutMs)
@@ -351,6 +364,14 @@ class RawWebSocketDeviceTransport(
             "upgrade" !in connectionTokens || accept != expected
         ) throw IOException("websocket handshake rejected")
         s.soTimeout = config.writeTimeoutMs
+        timingProbeTask = timingProbeScheduler.scheduleAtFixedRate(
+            {
+                if (!closing && state == TransportState.CONNECTED) runCatching { sendTimingProbe(probeEpoch) }
+            },
+            TIMING_PROBE_INTERVAL_MS,
+            TIMING_PROBE_INTERVAL_MS,
+            TimeUnit.MILLISECONDS,
+        )
     }
     override fun writeFrame(frame: ByteArray) {
         val mask = ByteArray(4).also { java.security.SecureRandom().nextBytes(it) }
@@ -372,7 +393,6 @@ class RawWebSocketDeviceTransport(
         val source = input ?: return
         while (!closing) {
             val first = try { source.read() } catch (_: SocketTimeoutException) {
-                sendTimingProbe()
                 continue
             }
             if (first < 0) return
@@ -395,24 +415,25 @@ class RawWebSocketDeviceTransport(
         }
     }
 
-    private fun sendTimingProbe() {
+    private fun sendTimingProbe(probeEpoch: Long) {
         val now = monotonicMs()
-        if (lastTimingProbeMs != Long.MIN_VALUE && now - lastTimingProbeMs < TIMING_PROBE_INTERVAL_MS) return
         val id = timingProbeIds.incrementAndGet()
-        synchronized(pendingTimingProbes) {
+        synchronized(timingProbeLock) {
+            if (probeEpoch != timingProbeEpoch || closing || state != TransportState.CONNECTED) return
+            if (lastTimingProbeMs != Long.MIN_VALUE && now - lastTimingProbeMs < TIMING_PROBE_INTERVAL_MS) return
             pendingTimingProbes[id] = now
             while (pendingTimingProbes.size > MAX_PENDING_TIMING_PROBES) {
                 pendingTimingProbes.remove(pendingTimingProbes.keys.first())
             }
+            lastTimingProbeMs = now
         }
-        lastTimingProbeMs = now
         sendControlFrame(0x9, ByteBuffer.allocate(8).putLong(id).array())
     }
 
     private fun receiveTimingPong(payload: ByteArray) {
         if (payload.size != 8) return
         val id = ByteBuffer.wrap(payload).long
-        val sent = synchronized(pendingTimingProbes) { pendingTimingProbes.remove(id) } ?: return
+        val sent = synchronized(timingProbeLock) { pendingTimingProbes.remove(id) } ?: return
         emitRoundTripSample(sent, monotonicMs())
     }
 
@@ -436,13 +457,23 @@ class RawWebSocketDeviceTransport(
         }
     }
     override fun closeConnection() {
-        synchronized(pendingTimingProbes) { pendingTimingProbes.clear() }
+        timingProbeTask?.cancel(false)
+        timingProbeTask = null
+        synchronized(timingProbeLock) {
+            timingProbeEpoch += 1
+            pendingTimingProbes.clear()
+        }
         runCatching { socket?.close() }
         runCatching { output?.close() }
         runCatching { input?.close() }
         output = null
         input = null
         socket = null
+    }
+
+    override fun close() {
+        super.close()
+        timingProbeScheduler.shutdownNow()
     }
     private fun readHeaders(input: BufferedInputStream): String {
         val bytes = ByteArrayOutputStreamCompat()

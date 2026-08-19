@@ -40,3 +40,31 @@ The redacted evidence document scan passed; it contains no credentials, locators
 - Physical WS/BLE/SPP/USB loopback, authorized media, and hardware safety remain `BLOCKED / NOT RUN`; no real transport or media was opened.
 - Automatic RTT remains `UNMEASURED` for transports without an explicit correlated response. Write completion, queue age, GATT acknowledgement, UI timing, wall clock, and arbitrary inbound bytes are intentionally excluded.
 - The service binder now exposes the scheduler entry points, but media-to-script matching is still owned by the sibling playback integration plan; absent a loaded `ScriptBundle`, no targets are produced.
+
+## Round 1 Review Fixes
+
+- Routed session emergency stop, safe-test submit/drain, connection-loss stop/disconnect, and controller release through the process-scoped coordinator's serialized executor. Sessions without a coordinator use one session-local serialized controller boundary.
+- Detached the session controller before serialized teardown so queued work is identity-checked and rejected after disconnect. Added coverage that records no post-disconnect normal output.
+- Added a blocking controller regression test proving scheduler submit and session controller operations never overlap (`maximumConcurrentOperations=1`).
+- Moved WebSocket timing probes to a fixed-rate scheduler independent of inbound reads. A connection epoch prevents a scheduled probe from repopulating pending state after close/reconnect.
+- Added a chatty loopback test that continuously sends inbound text frames while the client still produces a correlated ping/pong timing sample.
+- Made session close deliver `onConnectionLost` once for the active connection and `onSessionClosed` once, without the coordinator translating session close into a second connection-loss callback.
+
+Final focused command run with JDK 17:
+
+```text
+JAVA_HOME=<JDK17> gradlew :core:device:testDebugUnitTest --tests '*NetworkDeviceTransportsTest' :core:script:testDebugUnitTest --tests '*ScriptLatencyRecordingIntegrationTest' :feature:device:testDebugUnitTest --tests '*DevicePlaybackCoordinatorTest' --tests '*DeviceSessionTest' --tests '*ManualAxisOutputIntegrationTest' --rerun-tasks --no-daemon --max-workers=1
+BUILD SUCCESSFUL in 1m 5s
+65 actionable tasks: 65 executed
+```
+
+Focused results:
+
+```text
+NetworkDeviceTransportsTest: 12 tests, 0 failures, 0 errors, 0 skipped
+ScriptLatencyRecordingIntegrationTest: 4 tests, 0 failures, 0 errors, 0 skipped
+DevicePlaybackCoordinatorTest: 1 test, 0 failures, 0 errors, 0 skipped
+DeviceSessionTest: 9 tests, 0 failures, 0 errors, 0 skipped
+ManualAxisOutputIntegrationTest: 2 tests, 0 failures, 0 errors, 0 skipped
+git diff --check: PASS
+```
