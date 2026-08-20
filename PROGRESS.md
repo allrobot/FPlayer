@@ -1,8 +1,8 @@
 # Progress
 
 ## 当前状态
-- 状态：T32 Task 5 跨系统整合已完成；JDK 17 全回归 51 suites/288 tests（0 failure、0 error、1 个预期门控 skip）、debug APK、native lock 与 hygiene 通过，release 因生产身份/签名输入缺失而 fail-closed；`SMB-REAL`/`RELEASE-HYGIENE` 为 `PASS`，其余外部、物理与发布 gate 保持 `BLOCKED`
-- 当前阶段：下一纵向工作为 Task 6 用户/发布决策门或 Task 7 最终 handoff；不加载已删除的重复子计划或 `.superpowers/sdd` ledger，不改固件、native 锁、设备持久配置或无关模块
+- 状态：T32 Task 5 跨系统整合已完成；JDK 17 全回归 51 suites/288 tests（0 failure、0 error、1 个预期门控 skip）、debug APK、native lock 与 hygiene 通过；个人自用 release 已完成签名验证，公开发布仍因 license/tag/reproducibility/publisher identity/release-device 前置保持 `BLOCKED`；`SMB-REAL`/`RELEASE-HYGIENE`/个人 `RELEASE-SIGN` 为 `PASS`
+- 当前阶段：Task 6 已验证个人自用 release，公开发布决策门仍待补齐；不加载已删除的重复子计划或 `.superpowers/sdd` ledger，不改固件、native 锁、设备持久配置或无关模块
 - 输入与验收：`TASKS.md` T32、`SPEC.md`、架构/安全文档、最早“方案定制”结论及用户授权的 `TEST_TABLET`、`TEST_OSR_WIFI`、`FUNSCRIPT_TEST_LIBRARY`；真实媒体只在 SAF 只读授权后读取
 - 上次 checkpoint：Task 5 fresh consolidation 已写入矩阵与证据索引；debug APK 为 56,624,071 bytes、SHA-256 `82A2E9552BFF75C405CF83B5D27BB1C1F5C2C90A685503BE7FC290DC274D997C`，release 在 `validateReleaseConfiguration` 因生产输入缺失被阻止；无 release artifact 被宣称通过
 - [2026-08-20] T32 设备媒体预检：运行时门控 SMB 主机/仪器测试改用 `FPLAYER_T32_SMB_*` 与 `t32-*` 逻辑标识；新增合成 SMB I/O 失败测试，确认失败码脱敏、工作 generation 标记 incomplete 且旧 current snapshot 保持不变。JDK 17 `:core:index:testDebugUnitTest --tests '*Smb*' --tests '*LocalSafScannerTest'`（48 Gradle tasks）及 `:core:device:testDebugUnitTest :feature:device:testDebugUnitTest`（60 Gradle tasks）通过。未访问凭据、真实 SMB、SAF、设备或外部资源。
@@ -201,6 +201,7 @@
 - 当前结果：Task 5 与 Task 7 文档同步完成；`T32-INTEGRATION-20260820` 与 `T32-HANDOFF-20260820` 为最新聚合证据。`SMB-REAL`、`RELEASE-HYGIENE` 保持 `PASS`，其余未满足真实资源或发布前置的 gate 保持 `BLOCKED`。
 - 最后成功验证：JDK 17 全工程 51 suites/288 tests（0 failure、0 error、1 expected skip）、debug assemble、native lock、15 项 release-compliance tests、hygiene scan、`git diff --check`；release 因生产身份/签名缺失 fail-closed。
 - release 复核（JDK 17，2026-08-20）：`:app:assembleRelease --no-configuration-cache --max-workers=1` 到达 `validateReleaseConfiguration` 后按预期 fail-closed，缺少 `FPLAYER_APPLICATION_ID`、`FPLAYER_VERSION_CODE`、`FPLAYER_VERSION_NAME` 和四项 release keystore 输入；未生成 release APK，也未创建临时签名材料。
+- 个人自用 release（2026-08-20）：用户批准使用 `io.github.fplayer.android`、versionCode `1`、versionName `1.0.0` 和本机未跟踪自签名 keystore；JDK 17 `:app:assembleRelease --no-configuration-cache --max-workers=1` 通过，zipalign 与 `apksigner verify`（v2）通过，APK 约 49.8 MB，SHA-256 `4859F181827FF1235D734E484B277A5EE16676588C277B2145B9F90788481785`。密码只保存于用户私有 DPAPI 加密凭据文件，未进入仓库、日志或报告。该证据只适用于个人安装，不解除公开发布身份、license、tag、reproducibility 或 release-device gate。
 - 安全退出：未访问新凭据、SAF、真实媒体或物理设备；未发送运动帧、未创建 release tag、未改变 gate 状态；工作区中用户的 `AGENTS.md` 修改及未跟踪 Task 5 工件保留，未纳入本 Task 提交。
 
 ## 待用户确认
