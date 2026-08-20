@@ -200,6 +200,7 @@
 - canonical 入口：`AGENTS.md` → `PROGRESS.md` → `docs/superpowers/plans/2026-08-19-t32-master-acceptance.md` → `docs/qa/t32-acceptance-matrix.md` → `docs/qa/t32-evidence-index.md`；detail report 仅作证据，不覆盖矩阵状态。
 - 当前结果：Task 5 与 Task 7 文档同步完成；`T32-INTEGRATION-20260820` 与 `T32-HANDOFF-20260820` 为最新聚合证据。`SMB-REAL`、`RELEASE-HYGIENE` 保持 `PASS`，其余未满足真实资源或发布前置的 gate 保持 `BLOCKED`。
 - 最后成功验证：JDK 17 全工程 51 suites/288 tests（0 failure、0 error、1 expected skip）、debug assemble、native lock、15 项 release-compliance tests、hygiene scan、`git diff --check`；release 因生产身份/签名缺失 fail-closed。
+- release 复核（JDK 17，2026-08-20）：`:app:assembleRelease --no-configuration-cache --max-workers=1` 到达 `validateReleaseConfiguration` 后按预期 fail-closed，缺少 `FPLAYER_APPLICATION_ID`、`FPLAYER_VERSION_CODE`、`FPLAYER_VERSION_NAME` 和四项 release keystore 输入；未生成 release APK，也未创建临时签名材料。
 - 安全退出：未访问新凭据、SAF、真实媒体或物理设备；未发送运动帧、未创建 release tag、未改变 gate 状态；工作区中用户的 `AGENTS.md` 修改及未跟踪 Task 5 工件保留，未纳入本 Task 提交。
 
 ## 待用户确认
