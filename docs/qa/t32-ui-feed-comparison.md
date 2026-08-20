@@ -2,6 +2,8 @@
 
 本报告只记录逻辑标识、控件语义和聚合测试结果，不记录外部地址、凭据、盘符、端口、真实媒体名或媒体内容。
 
+This is a detail record for `UI-FEED`; the current gate state is authoritative only in `docs/qa/t32-acceptance-matrix.md`. It distinguishes tested integration boundaries from the still-blocked physical viewport acceptance.
+
 ## Baseline
 
 | Area | Source/fixture | Result | Evidence | Follow-up |
@@ -17,8 +19,8 @@
 ## Current APK Gaps
 
 - Empty indexed libraries still render the placeholder and folder-picker action by design.
-- Compose does not yet consume `FeedPagingStateMachine` for vertical paging or settled single-active promotion.
-- Real libmpv Surface binding, indexed-script loading, thumbnail cache-root loading, and catalog selection are service-owned; physical viewport proof remains blocked because the approved fixture flow was not run this round.
+- Complete Compose consumption of `FeedPagingStateMachine` for vertical paging and settled single-active promotion remains an acceptance boundary.
+- Service-owned Surface handoff, indexed-script resolution, and thumbnail cache-root lifecycle have focused integration evidence (`0be0df5`, `954f516`); complete catalog-to-playback behavior and the approved physical viewport fixture were not run this round, so the external gate remains BLOCKED.
 
 ## Reference Behavior Matrix
 

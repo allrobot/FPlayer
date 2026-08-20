@@ -1,5 +1,7 @@
 # T32 Release Compliance Report
 
+This is a detail record for `RELEASE-*`; the current gate states are authoritative only in `docs/qa/t32-acceptance-matrix.md`. The machine-readable result remains `docs/release/release-gate-result.json`.
+
 Status: BLOCKED. This report records the final gate attempt without claiming a
 release-ready build.
 

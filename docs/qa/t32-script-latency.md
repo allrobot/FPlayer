@@ -1,5 +1,7 @@
 # T32 Script Latency QA
 
+This is a detail record for `SCRIPT-LATENCY`; the current gate state is authoritative only in `docs/qa/t32-acceptance-matrix.md`. Deterministic implementation evidence and external protocol/resource acceptance are intentionally reported separately.
+
 ## Scope
 
 This record covers deterministic estimator, scheduler, device-session, and service lifecycle behavior. Tests use synthetic clocks, fake controllers/transports, and an in-process WebSocket loopback only. No physical transport, real media, SMB source, or hardware was opened.

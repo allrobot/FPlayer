@@ -4,6 +4,8 @@ Date: 2026-08-20
 
 This index stores only repository-relative evidence, stable logical resource identifiers and non-sensitive aggregate results. It does not store external addresses, account names, credentials, physical port names, media names, locators or script content.
 
+The acceptance matrix is the sole current gate-state source. This index is the sole evidence pointer source; it does not replace the matrix or the master plan. Historical execution ledgers under `.superpowers/sdd/` are intentionally not copied here.
+
 | Evidence ID | Matrix IDs | Command or source | Result | Evidence location |
 | --- | --- | --- | --- | --- |
 | `BASELINE-UNIT-20260819` | all code gates | `gradlew testDebugUnitTest --no-configuration-cache --rerun-tasks --max-workers=1` | 36 XML suites, 199 tests, 0 failures, 0 errors, 1 expected runtime-gated skip; build successful | Generated module `build/test-results/` directories, not tracked |
@@ -12,18 +14,27 @@ This index stores only repository-relative evidence, stable logical resource ide
 | `BASELINE-HYGIENE-20260819` | all gates | `git diff --check` and controlled sensitive-value scan | Pass; local execution ledger, build output, credentials and signing material remain ignored | `.gitignore`, Task 0 command output |
 | `T31-AUTOMATION` | `DEVICE-*`, `SMB-REAL` | Prior performance and fault-injection acceptance | TCP/UDP/WebSocket loopback and anonymous cross-host SMB passed; authenticated external SMB and physical device remained open | `docs/qa/t31-report.md` |
 | `T31-TABLET` | `UI-FEED`, `MEDIA-*` | Prior API 33 background and lifecycle acceptance | Native playback, screen-off loop, notification permission, rotation, trim and cleanup passed with neutral fixture | `docs/qa/t31-report.md` |
-| `T32-PLAN-MASTER` | all gates | Master execution plan | Fixed gate IDs, ordering, safety constraints and final reporting rules | `docs/superpowers/plans/2026-08-19-t32-master-acceptance.md` |
-| `T32-PLAN-UI` | `UI-FEED` | UI comparison plan | Exact state, Surface, heatmap, viewport and cleanup tasks | `docs/superpowers/plans/2026-08-19-t32-ui-feed-comparison.md` |
-| `T32-PLAN-SCRIPT` | `SCRIPT-LATENCY` | Script latency and range plan | Exact latency, range, scheduler and settings tasks | `docs/superpowers/plans/2026-08-19-t32-funscript-latency.md` |
-| `T32-PLAN-DEVICE` | `DEVICE-*`, `MEDIA-*`, `SMB-REAL` | Device and media plan | Loopback-first, SAF, authenticated SMB, physical safety and cleanup tasks | `docs/superpowers/plans/2026-08-19-t32-device-media-acceptance.md` |
-| `T32-PLAN-RELEASE` | `RELEASE-*` | Release compliance plan | License, attribution, privacy, reproducibility and signing tasks | `docs/superpowers/plans/2026-08-19-t32-release-compliance.md` |
-| `T32-SMB-REAL-20260820` | `SMB-REAL` | Runtime-gated SMB acceptance review | Pass for both authorized roots: root A `28/28/28` and root B `8/38/8` media/total-scripts/matched-scripts; genuine socket interruption, generation-3 recovery and credential cleanup passed. Tablet instrumentation remains blocked without `TEST_TABLET`. | `docs/qa/t32-device-media-acceptance.md` |
+| `T32-PLAN-MASTER` | all gates | Canonical T32 task plan | Task 0–7 definitions, dependencies, safety rules and status semantics | `docs/superpowers/plans/2026-08-19-t32-master-acceptance.md` |
+| `T32-SMB-REAL-20260820` | `SMB-REAL` | Runtime-gated SMB acceptance review | Pass for both authorized roots: root A `28/28/28` and root B `8/38/8` media/total-scripts/matched-scripts; genuine socket interruption, generation-3 recovery and credential cleanup passed. The separate tablet instrumentation gate was not run; later ADB visibility is not acceptance evidence. | `docs/qa/t32-device-media-acceptance.md` |
 | `T32-UI-INTEGRATION-20260820` | `UI-FEED` | JDK 17 focused app/core tests and debug assembly | Surface handoff, indexed-script matching, bounded locator reader, thumbnail owner/cache-root tests and debug assembly passed; approved tablet viewport flow was not run, so physical evidence remains BLOCKED | `0be0df5`, `app/src/test/java/io/github/fplayer/android/IndexedScriptResolverTest.kt`, `app/src/test/java/io/github/fplayer/android/PlaybackSurfaceHandoffTest.kt` |
 | `T32-RELEASE-HYGIENE-20260820` | `RELEASE-HYGIENE` | Python unittest and hygiene CLI | 15 release-compliance tests passed; fresh scan returned PASS without printing matched text or paths | `2cdcbcb`, `ad74db0`, `native-build/scan-release-hygiene.py` |
 
 ## Count Authority
 
 The fresh XML aggregation and `docs/qa/t31-report.md` both report 36 suites and 199 tests. This fresh baseline supersedes any smaller informal summary count for T32 decisions.
+
+## Task Mapping
+
+| Task | Implementation/evidence state | External/final gate state | Primary evidence |
+| --- | --- | --- | --- |
+| 0 | `COMPLETE` for baseline assets and redaction rules | `COMPLETE` for the documentation asset | `docs/qa/t32-acceptance-matrix.md`, `docs/qa/t32-evidence-index.md` |
+| 1 | `COMPLETE` for service/integration boundaries and synthetic tests | `BLOCKED` for approved tablet viewport/Surface evidence | `0be0df5`, `954f516`, `docs/qa/t32-ui-feed-comparison.md` |
+| 2 | `COMPLETE` for deterministic estimator/scheduler/range/settings behavior | `BLOCKED` for protocol-specific and real-resource evidence | `d1b47ea`, `docs/qa/t32-script-latency.md` |
+| 3 | `PARTIAL`; loopback and authenticated SMB host acceptance passed | `BLOCKED` for SAF and physical WS/BLE/SPP/USB gates | `docs/qa/t32-device-media-acceptance.md` |
+| 4 | `PARTIAL`; hygiene and fail-closed gate reporting passed | `BLOCKED` for complete license/repro/tag/sign/device inputs | `docs/qa/t32-release-compliance-report.md`, `docs/release/release-gate-result.json` |
+| 5 | `PENDING` | `PENDING` | `docs/qa/t32-acceptance-matrix.md` |
+| 6 | `BLOCKED` | `BLOCKED` | `docs/release/`, `docs/security/test-device-policy.md` |
+| 7 | `PARTIAL`; handoff artifacts exist but public synchronization was pending | `PENDING` | `PROGRESS.md`, `docs/qa/t32-acceptance-matrix.md` |
 
 ## Evidence Rules
 

@@ -10,6 +10,25 @@
 
 **Spec:** `TASKS.md` T32、`SPEC.md`、`docs/ui/interaction-spec.md`、`docs/architecture/script-scheduler.md`、`docs/architecture/device-layer.md`、`docs/architecture/background-playback.md`、`docs/security/test-device-policy.md`、`docs/qa/t31-report.md`。
 
+## Authority and Current Status
+
+This is the only active T32 task plan. Current gate states are authoritative only in `docs/qa/t32-acceptance-matrix.md`; evidence pointers and aggregate command results are authoritative only in `docs/qa/t32-evidence-index.md`. The per-area QA and release reports are detail records and must not introduce a competing current status. Ignored `.superpowers/sdd/` ledgers are historical execution records and are not cold-start inputs.
+
+The checkboxes below describe the acceptance actions and rerun procedure. They are not the current status source; the table below separates implementation/evidence progress from external acceptance.
+
+| Task | Implementation or evidence state | External or final gate state | Current evidence |
+| --- | --- | --- | --- |
+| 0 | `COMPLETE`: baseline matrix, evidence index and authority reconciliation are recorded | `COMPLETE` for the documentation asset | `docs/qa/t32-acceptance-matrix.md`, `docs/qa/t32-evidence-index.md` |
+| 1 | `COMPLETE` for service/integration boundaries and synthetic tests | `BLOCKED`: approved tablet viewport and real Surface fixture were not run | `0be0df5`, `954f516`, `docs/qa/t32-ui-feed-comparison.md` |
+| 2 | `COMPLETE` for deterministic estimator, scheduler, range, settings and lifecycle tests | `BLOCKED`: protocol-specific response samples, physical transports and real media remain unverified | `d1b47ea`, `docs/qa/t32-script-latency.md` |
+| 3 | `PARTIAL`: loopback and authenticated SMB host acceptance passed | `BLOCKED`: tablet SAF and physical WS/BLE/SPP/USB gates remain open | `docs/qa/t32-device-media-acceptance.md` |
+| 4 | `PARTIAL`: hygiene tooling and reports passed; release inputs are fail-closed | `BLOCKED`: complete license closure, tag, reproducibility, production identity/signing and release device are absent | `docs/qa/t32-release-compliance-report.md`, `docs/release/release-gate-result.json` |
+| 5 | `PENDING`: no fresh single cross-system consolidation record exists | `PENDING` | `docs/qa/t32-acceptance-matrix.md`, `docs/qa/t32-evidence-index.md` |
+| 6 | `BLOCKED`: required user and release decisions are missing | `BLOCKED` | `docs/release/`, `docs/security/test-device-policy.md` |
+| 7 | `PARTIAL`: historical checkpoints exist; public plan/status synchronization is now being completed | `PENDING` handoff | `PROGRESS.md`, `docs/qa/t32-evidence-index.md` |
+
+`FAIL` is reserved for a demonstrated product or test defect. Missing devices, credentials, profiles, release identity, tags or signing material are `BLOCKED`; an unattempted check is `NOT_RUN`.
+
 ## Global Constraints
 
 - 自有源码继续使用 `GPL-3.0-or-later`；第三方许可证和版权原文必须随发布资产保留。
@@ -19,33 +38,35 @@
 - 真实 TCode 首次动作必须唯一 profile、空载、可目视、可立即断电、单轴、中心附近、每条命令 `<=500 ms`；loopback 失败不得进入实物阶段。
 - 脚本用户限幅（默认 `0..100%`）先于设备 profile 安全限幅；任何 UI 路径都不能绕过 `DeviceSafetyController`。
 - 延迟正值表示脚本延后，负值表示脚本提前；自动补偿只能在有可验证响应样本时启用，并有最大绝对值和过期策略。
-- 每个纵向子计划控制在 8–12 个主要源码文件；完成一个子计划后运行相关测试、`assembleDebug`/`assembleRelease`（按范围）并更新 `PROGRESS.md`。
+- 每个纵向 Task 控制在 8–12 个主要源码文件；完成一个 Task 后运行相关测试、`assembleDebug`/`assembleRelease`（按范围）并更新 `PROGRESS.md`。
 - 新文件先写同目录 `.tmp.<task-id>`，读回校验后原子重命名；每次阶段结束检查 `git diff --check`、尾随空白、临时文件和 `git status --short`。
 - 不复制 TikTok、参考 APK 或网页的品牌素材、私有实现、成人媒体内容或二进制代码；只记录可观察的交互事实和来源逻辑标识。
 
 ## 计划关系与执行顺序
 
-1. `2026-08-19-t32-ui-feed-comparison.md`：Feed/播放叠层/热力图和参考 UI 对比。
-2. `2026-08-19-t32-funscript-latency.md`：真实脚本匹配、自动/手工延迟、轴实时控制和两层限幅。
-3. `2026-08-19-t32-device-media-acceptance.md`：WS/BLE/SPP/USB、安全停止、平板真实媒体和 SMB。
-4. `2026-08-19-t32-release-compliance.md`：许可证、NOTICE、隐私、归属、可复现构建和签名说明。
-5. 本文件 Task 5–7：跨子系统整合、最终门和报告。
+1. Task 0 固定脱敏矩阵、证据索引和状态语义。
+2. Tasks 1–4 分别覆盖 UI/Feed、脚本延迟与限幅、设备/媒体、发布合规；详细结果写入对应 QA 或 release detail record。
+3. Task 5 只汇总矩阵和证据索引，不创建第二份总状态表。
+4. Task 6 处理不可替代的发布和物理安全前置；缺失前置保持 `BLOCKED`。
+5. Task 7 复读三份 canonical 文档和 `PROGRESS.md`，为下一会话留下单一入口。
+
+The four former subplans were execution material, not independent authority. Their stable requirements are retained here and their observed results remain in the detail reports; they are removed from the active plan directory after this reconciliation.
 
 ### Task 0: 建立脱敏基线和验收证据目录
 
 **Files:**
-- Create: `docs/qa/t32-acceptance-matrix.md`
-- Create: `docs/qa/t32-evidence-index.md`
+- Maintain/Modify: `docs/qa/t32-acceptance-matrix.md`
+- Maintain/Modify: `docs/qa/t32-evidence-index.md`
 - Modify: `PROGRESS.md`
 - Test: `native-build/verify-lock.py`、现有 T31 报告和四 viewport 截图
 
 **Interfaces:**
 - Consumes: `TASKS.md` T32、T31 统计、现有架构契约、逻辑资源标识。
-- Produces: 每个验收项的 `ID / 前置条件 / 输入 / 命令 / 期望 / 证据位置 / 阻塞原因 / 清理动作` 表；后续子计划只追加结果，不改变 ID。
+- Produces: 每个验收项的 `ID / 前置条件 / 输入 / 命令 / 期望 / 证据位置 / 阻塞原因 / 清理动作` 表；后续 Task 只追加结果，不改变 ID。
 
 - [ ] **Step 1: 固定矩阵 ID 和 gate 状态**
 
-  在 `t32-acceptance-matrix.md` 写入以下固定组：`UI-FEED`、`SCRIPT-LATENCY`、`DEVICE-WS`、`DEVICE-BLE`、`DEVICE-SPP`、`DEVICE-USB`、`MEDIA-SD-MULTIAXIS`、`MEDIA-SD-SINGLEAXIS`、`SMB-REAL`、`RELEASE-LICENSE`、`RELEASE-REPRO`、`RELEASE-SIGN`。每项状态只能是 `PASS`、`FAIL`、`BLOCKED`、`NOT_RUN`。
+  在 `t32-acceptance-matrix.md` 写入以下固定组：`UI-FEED`、`SCRIPT-LATENCY`、`DEVICE-WS`、`DEVICE-BLE`、`DEVICE-SPP`、`DEVICE-USB`、`MEDIA-SD-MULTIAXIS`、`MEDIA-SD-SINGLEAXIS`、`SMB-REAL`、`RELEASE-LICENSE`、`RELEASE-HYGIENE`、`RELEASE-REPRO`、`RELEASE-SIGN`、`RELEASE-TAG`、`RELEASE-DEVICE`。每项状态只能是 `PASS`、`FAIL`、`BLOCKED`、`NOT_RUN`。
 
 - [ ] **Step 2: 记录当前已知事实而不写敏感值**
 
@@ -70,12 +91,12 @@
 
 - [ ] **Step 5: 更新 checkpoint**
 
-  在 `PROGRESS.md` 增加 T32 矩阵版本、当前 gate 和下一子计划；保持文件不超过 200 行。
+  在 `PROGRESS.md` 增加 T32 矩阵版本、当前 gate 和下一 Task；保持文件不超过 200 行。
 
-### Task 1: 执行 UI/Feed 对比子计划
+### Task 1: 执行 UI/Feed 对比与验收
 
 **Files:**
-- Read/Modify: 由 `docs/superpowers/plans/2026-08-19-t32-ui-feed-comparison.md` 明确的 `app/`、`feature/feed/`、`feature/library/` 文件
+- Read/Modify: `app/`、`feature/feed/`、`feature/library/` 文件；结果写入 `docs/qa/t32-ui-feed-comparison.md`
 - Test: Feed/overlay/progress/long-press 单测、Compose/ADB 四 viewport 截图和无障碍树
 
 **Interfaces:**
@@ -102,10 +123,10 @@
 
   每个修复先写纯状态测试，再绑定 Compose；不得在该任务顺手修改延迟、设备协议或发布配置。修复后更新 `UI-FEED` 证据。
 
-### Task 2: 执行 Funscript/延迟/限幅子计划
+### Task 2: 执行 Funscript/延迟/限幅验收
 
 **Files:**
-- Read/Modify: 由 `docs/superpowers/plans/2026-08-19-t32-funscript-latency.md` 明确的 `core/script/`、`core/device/`、`feature/settings/`、`feature/feed/` 文件
+- Read/Modify: `core/script/`、`core/device/`、`feature/settings/`、`feature/feed/` 文件；结果写入 `docs/qa/t32-script-latency.md`
 - Test: 确定性时钟、录制 frame sink、每轴范围和延迟估计测试
 
 **Interfaces:**
@@ -132,10 +153,10 @@
 
   提供自动计算开关、正负整数输入、测量状态、每轴实时位置和上下限滑块；默认上限 100%、下限 0%。文本必须在窄屏/1.3x 字体下完整显示，诊断只显示延迟统计类别和数值，不显示地址或媒体名。
 
-### Task 3: 执行设备连接与真实媒体验收子计划
+### Task 3: 执行设备连接与真实媒体验收
 
 **Files:**
-- Read/Modify: 由 `docs/superpowers/plans/2026-08-19-t32-device-media-acceptance.md` 明确的 `core/device/`、`feature/device/`、`core/index/`、`app/` 测试夹具
+- Read/Modify: `core/device/`、`feature/device/`、`core/index/`、`app/` 测试夹具；结果写入 `docs/qa/t32-device-media-acceptance.md`
 - Test: loopback、Android instrumentation、SAF/SMB 门控、脱敏 frame recorder
 
 **Interfaces:**
@@ -170,10 +191,10 @@
 
   停止播放、急停、断开 transport、删除本应用产生的 fixture/cache、撤销临时蓝牙/通知权限、force-stop 本包；报告只写计数和状态。
 
-### Task 4: 执行 T32 发布合规子计划
+### Task 4: 执行 T32 发布合规验收
 
 **Files:**
-- Read/Modify: 由 `docs/superpowers/plans/2026-08-19-t32-release-compliance.md` 明确的根 `NOTICE`、`THIRD_PARTY_LICENSES`、`docs/compliance/`、`docs/privacy/`、`docs/release/`、`native-build/`、`app/build.gradle.kts`
+- Read/Modify: 根 `NOTICE`、`THIRD_PARTY_LICENSES`、`docs/compliance/`、`docs/privacy/`、`docs/release/`、`native-build/`、`app/build.gradle.kts`；结果写入 `docs/qa/t32-release-compliance-report.md`
 - Test: lock/evidence/license/path/reproducibility/signature 扫描
 
 **Interfaces:**
@@ -203,12 +224,12 @@
 ### Task 5: 跨系统整合验收
 
 **Files:**
-- Modify: `docs/qa/t32-acceptance-matrix.md`、`docs/qa/t32-evidence-index.md`、`docs/qa/t32-report.md`、`PROGRESS.md`
+- Modify: `docs/qa/t32-acceptance-matrix.md`、`docs/qa/t32-evidence-index.md`、`PROGRESS.md`
 - Test: 全工程单测、debug/release 构建、ADB/SMB/loopback 门控
 
 **Interfaces:**
-- Consumes: 四个子计划的证据和未解决 gate。
-- Produces: 一份不夸大结论的 T32 report，能区分代码通过、环境未满足和用户决定缺失。
+- Consumes: Tasks 1–4 的 detail report 证据和未解决 gate。
+- Produces: 更新后的 canonical matrix/evidence index，能区分代码通过、环境未满足和用户决定缺失。
 
 - [ ] **Step 1: 运行全工程回归**
 
@@ -228,12 +249,12 @@
 
 - [ ] **Step 3: 更新报告和进度**
 
-  `t32-report.md` 按矩阵 ID 写结果、证据、环境、清理和阻塞；`PROGRESS.md` 保持 200 行以内并记录下一步。
+  按矩阵 ID 更新 `t32-acceptance-matrix.md` 和 `t32-evidence-index.md` 的结果、证据、环境、清理和阻塞；不创建第二份总状态报告。`PROGRESS.md` 保持 200 行以内并记录下一步。
 
 ### Task 6: 最终发布门与用户决策门
 
 **Files:**
-- Read: `docs/qa/t32-acceptance-matrix.md`、`docs/qa/t32-report.md`、`docs/release/`
+- Read: `docs/qa/t32-acceptance-matrix.md`、`docs/qa/t32-evidence-index.md`、`docs/qa/t32-release-compliance-report.md`、`docs/release/`
 - Test: clean checkout/archive rebuild、签名验证、ADB cleanup audit
 
 - [ ] **Step 1: 验证不可替代的发布前置**
@@ -252,17 +273,17 @@
 
 - [ ] **Step 1: 复读所有计划与状态文件**
 
-  检查链接、命令、接口名称和矩阵 ID 一致；运行占位符扫描，确认没有未解决的占位符或敏感外部值。
+  检查主计划、验收矩阵、证据索引、detail reports 之间的链接、命令、接口名称和矩阵 ID 一致；运行占位符扫描，确认没有未解决的占位符或敏感外部值。
 
 - [ ] **Step 2: 写下一会话入口**
 
-  在 `PROGRESS.md` 最后记录当前 gate、最后成功命令、未完成子计划和安全退出状态；若上下文或证据过长，建议从该文件开启新会话。
+  在 `PROGRESS.md` 最后记录当前 gate、最后成功命令、未完成 Task 和安全退出状态；若上下文或证据过长，建议从该文件开启新会话。
 
 ---
 
 ## 自检结果
 
-- 规格覆盖：T32 的许可证、NOTICE、归属、隐私、可复现构建、签名和敏感信息门分别由 Task 4–6 覆盖；用户新增的 UI、延迟、限幅、真实媒体、SMB、WS/BLE/SPP/USB 由 Task 1–3 和对应子计划覆盖。
-- 占位符扫描：JDK 17 通过本地 `JDK_17_HOME` 环境变量注入；所有环境缺失都定义为 `BLOCKED`，没有 `TBD`、`TODO` 或“适当处理”类步骤。
-- 接口一致性：`ScriptSchedulerConfig.offsetMs`、`DeviceSafetyController`、`DeviceConnectionRequest`、`SmbSourceConfig`、逻辑 profile 与子计划保持同名；新增契约在子计划 Task 2 中先定义再被后续任务消费。
+- 规格覆盖：T32 的许可证、NOTICE、归属、隐私、可复现构建、签名和敏感信息门分别由 Task 4–6 覆盖；用户新增的 UI、延迟、限幅、真实媒体、SMB、WS/BLE/SPP/USB 由 Task 1–3 和对应 detail reports 覆盖。
+- 占位符扫描：JDK 17 通过本地 `JDK_17_HOME` 环境变量注入；所有环境缺失都定义为 `BLOCKED`，步骤均有具体输入、命令、预期和清理动作。
+- 接口一致性：`ScriptSchedulerConfig.offsetMs`、`DeviceSafetyController`、`DeviceConnectionRequest`、`SmbSourceConfig` 和逻辑 profile 在 Tasks 1–4 中保持同名；新增契约先定义再被后续 Task 消费。
 - 安全复核：计划不保存用户提供的 SMB/Wi-Fi/设备凭据，不承诺不存在的 COM/OSR 目标，不把匿名 SMB 或 debug APK 当作发布通过。

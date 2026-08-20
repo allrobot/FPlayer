@@ -2,6 +2,8 @@
 
 Date: 2026-08-20
 
+This is a detail record for `DEVICE-*`, `MEDIA-*`, and `SMB-REAL`; the current gate states are authoritative only in `docs/qa/t32-acceptance-matrix.md`.
+
 This report contains aggregate, redacted evidence only. Runtime endpoints, credentials, device addresses, serial names, media names, locators and frame payloads are intentionally omitted.
 
 ## Loopback And Synthetic Gates
@@ -31,14 +33,14 @@ The first real run exposed a test-fixture defect: closing a proxy after a comple
 
 | Gate | State | Blocker |
 | --- | --- | --- |
-| `MEDIA-SD-MULTIAXIS` | BLOCKED | No ADB-visible tablet or persisted read-only SAF grant in this run. |
-| `MEDIA-SD-SINGLEAXIS` | BLOCKED | No ADB-visible tablet or persisted read-only SAF grant in this run. |
+| `MEDIA-SD-MULTIAXIS` | BLOCKED | ADB visibility was confirmed later, but this gate has no persisted read-only SAF grant or accepted tablet run. |
+| `MEDIA-SD-SINGLEAXIS` | BLOCKED | ADB visibility was confirmed later, but this gate has no persisted read-only SAF grant or accepted tablet run. |
 
 ## TEST_OSR_DEVICE Transports
 
 | Gate | State | Blocker |
 | --- | --- | --- |
-| `DEVICE-WS` | BLOCKED | No ADB-visible tablet and no uniquely accepted runtime profile. |
+| `DEVICE-WS` | BLOCKED | ADB visibility alone is insufficient; no uniquely accepted runtime profile or physical-safety run exists. |
 | `DEVICE-SPP` | BLOCKED | No uniquely accepted paired target/profile. |
 | `DEVICE-BLE` | BLOCKED | No uniquely accepted candidate/profile. |
 | `DEVICE-USB` | BLOCKED | No Android USB descriptor and permission confirmation. |
@@ -50,4 +52,4 @@ No physical TCode motion was attempted. The unloaded/visible/immediate-cutoff/un
 - Runtime SMB credential buffers were cleared and the credential entry deleted.
 - No real media was copied or modified.
 - No Android package, device setting, firmware or persistent device configuration was changed.
-- ADB/device and physical transport cleanup remains pending until a real target is present.
+- No Android or physical transport action was initiated in this report, so no device cleanup action was required.

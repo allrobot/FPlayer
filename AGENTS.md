@@ -11,6 +11,15 @@
 
 禁止冷启动时递归读取全部文档、上游仓库、历史日志或生成物。
 
+T32 接续会话在读取 `AGENTS.md` 和 `PROGRESS.md` 后，固定使用以下最小顺序：
+
+1. 读取 `docs/superpowers/plans/2026-08-19-t32-master-acceptance.md`，获取 Task 0–7 定义、依赖和安全边界。
+2. 读取 `docs/qa/t32-acceptance-matrix.md`，获取唯一的当前 gate 状态。
+3. 读取 `docs/qa/t32-evidence-index.md`，获取证据指针和聚合结果。
+4. 只读取当前所选 Task 明确需要的一份 detail report 或规范文档。
+
+冷启动时不得加载 `.superpowers/sdd/` ledger、已删除的历史子计划或全部 `docs/`。`TASKS.md` 和 `SPEC.md` 定义产品需求，主计划定义 T32 执行，矩阵定义当前状态，证据索引定义证据位置；detail report 不得覆盖这些权威来源。
+
 ## 2. 当前产品边界
 
 - Android 本地/SMB 视频播放器，交互参考短视频应用但不复制其品牌、素材或私有实现。
