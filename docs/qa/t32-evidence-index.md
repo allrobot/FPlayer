@@ -34,7 +34,7 @@ Task 5 fresh XML aggregation reports 51 suites and 288 tests, with 0 failures, 0
 | 1 | `COMPLETE` for service/integration boundaries and synthetic tests | `BLOCKED` for approved tablet viewport/Surface evidence | `0be0df5`, `954f516`, `docs/qa/t32-ui-feed-comparison.md` |
 | 2 | `COMPLETE` for deterministic estimator/scheduler/range/settings behavior | `BLOCKED` for protocol-specific and real-resource evidence | `d1b47ea`, `docs/qa/t32-script-latency.md` |
 | 3 | `PARTIAL`; loopback and authenticated SMB host acceptance passed | `BLOCKED` for SAF and physical WS/BLE/SPP/USB gates | `docs/qa/t32-device-media-acceptance.md` |
-| 4 | `PARTIAL`; hygiene and fail-closed gate reporting passed | `BLOCKED` for complete license/repro/tag/sign/device inputs | `docs/qa/t32-release-compliance-report.md`, `docs/release/release-gate-result.json` |
+| 4 | `PARTIAL`; hygiene and personal-use signing passed; public release reporting remains fail-closed | `BLOCKED` for complete license/repro/tag/publisher-identity/device inputs | `docs/qa/t32-release-compliance-report.md`, `docs/release/release-gate-result.json`, `T32-PERSONAL-RELEASE-20260820` |
 | 5 | `COMPLETE` for fresh cross-system consolidation | `BLOCKED` where a row still requires external, physical or owner-provided evidence | `T32-INTEGRATION-20260820`, `docs/qa/t32-acceptance-matrix.md` |
 | 6 | `BLOCKED` | `BLOCKED` | `docs/release/`, `docs/security/test-device-policy.md` |
 | 7 | `COMPLETE`; canonical handoff artifacts are synchronized | `PENDING` for still-blocked external and release gates | `T32-HANDOFF-20260820`, `PROGRESS.md` |

@@ -10,7 +10,7 @@ verified below without claiming a publisher-ready build.
 | Gate | Status | Evidence | Reason |
 | --- | --- | --- | --- |
 | RELEASE-LICENSE | BLOCKED | `docs/compliance/license-matrix.json` | Matrix is BLOCKED and lacks complete dependency entries/evidence. |
-| RELEASE-REPRO | BLOCKED | `docs/release/reproducible-build.md` | No annotated release tag or approved production application identity. |
+| RELEASE-REPRO | BLOCKED | `docs/release/reproducible-build.md` | No annotated release tag or approved public publisher identity/reproducibility evidence. |
 | RELEASE-SIGN | PASS (personal-use scope) | `T32-PERSONAL-RELEASE-20260820` | User-approved personal identity and local signature verify; public publisher certificate remains out of scope. |
 | RELEASE-HYGIENE | PASS | `native-build/scan-release-hygiene.py` | Tracked text and selected generated metadata passed the fail-closed scan. |
 | RELEASE-TAG | BLOCKED | `docs/release/release-gates.md` | No annotated release tag exists. |
