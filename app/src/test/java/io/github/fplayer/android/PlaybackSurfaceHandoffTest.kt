@@ -42,4 +42,17 @@ class PlaybackSurfaceHandoffTest {
         assertEquals(1, detachCount)
         assertFalse(handoff.hasAttachedSurface)
     }
+
+    @Test
+    fun repeatedLateAttachmentsAfterHostStopDetachOnlyOnce() {
+        var detachCount = 0
+        val handoff = PlaybackSurfaceHandoff { detachCount += 1 }
+
+        handoff.onHostStopped()
+        assertTrue(handoff.recordAttachment(true))
+        assertTrue(handoff.recordAttachment(true))
+
+        assertEquals(1, detachCount)
+        assertFalse(handoff.hasAttachedSurface)
+    }
 }

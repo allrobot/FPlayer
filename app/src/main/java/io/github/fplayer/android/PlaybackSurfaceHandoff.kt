@@ -6,6 +6,7 @@ class PlaybackSurfaceHandoff(
 ) {
     private var attached = false
     private var hostStopped = false
+    private var lateAttachDetached = false
 
     val hasAttachedSurface: Boolean
         get() = attached
@@ -13,7 +14,10 @@ class PlaybackSurfaceHandoff(
     fun recordAttachment(succeeded: Boolean): Boolean {
         if (!succeeded) return false
         if (hostStopped) {
-            detach()
+            if (!lateAttachDetached) {
+                lateAttachDetached = true
+                detach()
+            }
             return true
         }
         attached = true
@@ -27,6 +31,7 @@ class PlaybackSurfaceHandoff(
 
     fun onHostStarted() {
         hostStopped = false
+        lateAttachDetached = false
     }
 
     fun onSurfaceDestroyed() {
