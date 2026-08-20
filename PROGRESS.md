@@ -1,14 +1,14 @@
 # Progress
 
 ## 当前状态
-- 状态：T31 自动化、实际媒体运行时接线、最新 `TEST_TABLET`、本机及 Android 跨主机真实 SMB2 验收通过；T32 当前以三份 canonical 文档为准：`UI-FEED` 与 `SCRIPT-LATENCY` 的外部门为 `BLOCKED`（确定性实现有证据），认证主机 `SMB-REAL` 为 `PASS`，真实媒体/物理设备与发布身份仍为 `BLOCKED`
-- 当前阶段：T32 文档权威关系已整理完成；后续会话从主计划 Task 5–7 继续，不加载已删除的重复子计划或 `.superpowers/sdd` ledger，不改固件、native 锁、设备持久配置或无关模块
+- 状态：T32 Task 5 跨系统整合已完成；JDK 17 全回归 51 suites/288 tests（0 failure、0 error、1 个预期门控 skip）、debug APK、native lock 与 hygiene 通过，release 因生产身份/签名输入缺失而 fail-closed；`SMB-REAL`/`RELEASE-HYGIENE` 为 `PASS`，其余外部、物理与发布 gate 保持 `BLOCKED`
+- 当前阶段：下一纵向工作为 Task 6 用户/发布决策门或 Task 7 最终 handoff；不加载已删除的重复子计划或 `.superpowers/sdd` ledger，不改固件、native 锁、设备持久配置或无关模块
 - 输入与验收：`TASKS.md` T32、`SPEC.md`、架构/安全文档、最早“方案定制”结论及用户授权的 `TEST_TABLET`、`TEST_OSR_WIFI`、`FUNSCRIPT_TEST_LIBRARY`；真实媒体只在 SAF 只读授权后读取
-- 上次 checkpoint：T31 Android SMBJ 跨主机扫描及断线旧 generation 保持通过；服务、规则、fixture、测试包和进程已清零，认证主机 SMB 已在 T32 细节报告中通过，平板 SAF 与物理设备仍未完成，详见 `docs/qa/t31-report.md` 和 `docs/qa/t32-device-media-acceptance.md`
+- 上次 checkpoint：Task 5 fresh consolidation 已写入矩阵与证据索引；debug APK 为 56,624,071 bytes、SHA-256 `82A2E9552BFF75C405CF83B5D27BB1C1F5C2C90A685503BE7FC290DC274D997C`，release 在 `validateReleaseConfiguration` 因生产输入缺失被阻止；无 release artifact 被宣称通过
 - [2026-08-20] T32 设备媒体预检：运行时门控 SMB 主机/仪器测试改用 `FPLAYER_T32_SMB_*` 与 `t32-*` 逻辑标识；新增合成 SMB I/O 失败测试，确认失败码脱敏、工作 generation 标记 incomplete 且旧 current snapshot 保持不变。JDK 17 `:core:index:testDebugUnitTest --tests '*Smb*' --tests '*LocalSafScannerTest'`（48 Gradle tasks）及 `:core:device:testDebugUnitTest :feature:device:testDebugUnitTest`（60 Gradle tasks）通过。未访问凭据、真实 SMB、SAF、设备或外部资源。
 - [2026-08-20] 修复真实 SMB 断线验收 harness 的 flat-share race：代理在首个目录 listing 返回后关闭连接，但无后续 listing 时扫描可能错误提交；wrapper 现在在关闭代理后注入稳定 `SMB_CONNECTION_CUT` I/O failure，并以合成 flat disconnect fixture 回归旧 snapshot 保持。报告中的 `CONNECTION_CUT_FAILED_AssertionError` 根因已覆盖；运行时 gate 未在本 shell 重跑，凭据未读取。
 - 用户授权（2026-08-11/19）：允许按安全策略读写真实 SMB/媒体/设备并调用 ADB/transport；平板提供多轴/单轴逻辑来源，允许临时 `TEST_OSR_WIFI` WebSocket 和独立 SPP，凭据只在运行时使用
-- 环境预检：平板可移除存储来源待 SAF 授权（盘点约 129/411 与 124/124 文件计数）；本机未确认唯一 `TEST_OSR_SERIAL`，串口/实物 gate 仍阻塞
+- 环境预检：只读 ADB 预检可见唯一在线 `TEST_TABLET`，但未执行 viewport/SAF/协议响应或物理设备验收；平板来源仍待用户 SAF 授权，唯一 `TEST_OSR_SERIAL`/`TEST_OSR_DEVICE` profile 与机械安全现场仍未确认
 
 ## 已完成
 - [2026-08-09] 确认 B+C 架构：libmpv + Android 原生 Funscript/TCode 设备层。
@@ -191,9 +191,9 @@
 
 ## 下一步
 
-1. T32 UI/缩略图/索引脚本集成已提交 `0be0df5`，Surface detach 边界修复已提交 `954f516`；release hygiene/gate/report 已提交 `2cdcbcb`、`ad74db0`。
-2. canonical 文档为 `docs/superpowers/plans/2026-08-19-t32-master-acceptance.md`、`docs/qa/t32-acceptance-matrix.md`、`docs/qa/t32-evidence-index.md`；领域 QA/release 文件只提供细节证据。
-3. 新会话入口：先读 `AGENTS.md`、本文件、上述三份 canonical 文档，再按主计划 Task 5–7 选择下一项；不得从旧 SDD ledger 或已删除子计划推导当前状态。license、production identity/key、annotated tag、physical/device gates 仍为 `BLOCKED`，ADB 可见不改变未执行的物理验收状态。
+1. Task 6 先收集不可替代的最终应用/组织/包名、生产签名、release tag、唯一设备 profile 与机械安全现场决定；任一缺失继续 `BLOCKED`，不得以 debug 构建替代。
+2. 若上述决定仍未提供，Task 7 复读主计划、矩阵、证据索引与本文件，完成最终 T32 handoff；领域 QA/release 文件只提供细节证据。
+3. 新会话入口：先读 `AGENTS.md`、本文件、主计划、矩阵和证据索引，再只读取当前 Task 要求的一份 detail report 或规范；ADB 可见不改变未执行的 viewport、SAF、协议响应或物理设备验收状态。
 
 ## 待用户确认
 

@@ -18,10 +18,11 @@ The acceptance matrix is the sole current gate-state source. This index is the s
 | `T32-SMB-REAL-20260820` | `SMB-REAL` | Runtime-gated SMB acceptance review | Pass for both authorized roots: root A `28/28/28` and root B `8/38/8` media/total-scripts/matched-scripts; genuine socket interruption, generation-3 recovery and credential cleanup passed. The separate tablet instrumentation gate was not run; later ADB visibility is not acceptance evidence. | `docs/qa/t32-device-media-acceptance.md` |
 | `T32-UI-INTEGRATION-20260820` | `UI-FEED` | JDK 17 focused app/core tests and debug assembly | Surface handoff, indexed-script matching, bounded locator reader, thumbnail owner/cache-root tests and debug assembly passed; approved tablet viewport flow was not run, so physical evidence remains BLOCKED | `0be0df5`, `app/src/test/java/io/github/fplayer/android/IndexedScriptResolverTest.kt`, `app/src/test/java/io/github/fplayer/android/PlaybackSurfaceHandoffTest.kt` |
 | `T32-RELEASE-HYGIENE-20260820` | `RELEASE-HYGIENE` | Python unittest and hygiene CLI | 15 release-compliance tests passed; fresh scan returned PASS without printing matched text or paths | `2cdcbcb`, `ad74db0`, `native-build/scan-release-hygiene.py` |
+| `T32-INTEGRATION-20260820` | all gates | JDK 17 full regression, debug/release assembly, native lock, hygiene and read-only ADB preflight | 51 suites/288 tests passed with 1 expected runtime-gated skip; debug APK passed at 56,624,071 bytes and SHA-256 `82A2E9552BFF75C405CF83B5D27BB1C1F5C2C90A685503BE7FC290DC274D997C`; release failed closed because production identity/signing inputs are absent; native lock, 15 release-compliance tests, hygiene scan and diff check passed. One online `TEST_TABLET` was visible, but connectivity alone changes no physical gate. | Generated module `build/test-results/` directories and `app/build/outputs/apk/debug/app-debug.apk`, both ignored; canonical result in this row |
 
 ## Count Authority
 
-The fresh XML aggregation and `docs/qa/t31-report.md` both report 36 suites and 199 tests. This fresh baseline supersedes any smaller informal summary count for T32 decisions.
+Task 5 fresh XML aggregation reports 51 suites and 288 tests, with 0 failures, 0 errors and 1 expected runtime-gated skip. It supersedes the Task 0/T31 36-suite/199-test baseline for current T32 regression decisions while preserving that older result as historical evidence.
 
 ## Task Mapping
 
@@ -32,7 +33,7 @@ The fresh XML aggregation and `docs/qa/t31-report.md` both report 36 suites and 
 | 2 | `COMPLETE` for deterministic estimator/scheduler/range/settings behavior | `BLOCKED` for protocol-specific and real-resource evidence | `d1b47ea`, `docs/qa/t32-script-latency.md` |
 | 3 | `PARTIAL`; loopback and authenticated SMB host acceptance passed | `BLOCKED` for SAF and physical WS/BLE/SPP/USB gates | `docs/qa/t32-device-media-acceptance.md` |
 | 4 | `PARTIAL`; hygiene and fail-closed gate reporting passed | `BLOCKED` for complete license/repro/tag/sign/device inputs | `docs/qa/t32-release-compliance-report.md`, `docs/release/release-gate-result.json` |
-| 5 | `PENDING` | `PENDING` | `docs/qa/t32-acceptance-matrix.md` |
+| 5 | `COMPLETE` for fresh cross-system consolidation | `BLOCKED` where a row still requires external, physical or owner-provided evidence | `T32-INTEGRATION-20260820`, `docs/qa/t32-acceptance-matrix.md` |
 | 6 | `BLOCKED` | `BLOCKED` | `docs/release/`, `docs/security/test-device-policy.md` |
 | 7 | `PARTIAL`; handoff artifacts exist but public synchronization was pending | `PENDING` | `PROGRESS.md`, `docs/qa/t32-acceptance-matrix.md` |
 

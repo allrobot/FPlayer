@@ -8,8 +8,8 @@ This matrix is the sole current T32 gate index. A gate changes state only when i
 
 | ID | State | Prerequisite | Acceptance input | Expected result | Evidence | Current blocker or failure | Cleanup |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `UI-FEED` | `BLOCKED` | Debug APK and synthetic indexed media | Current Feed, grid, overlay and four viewports | One active video Surface, vertical settled paging, progress or heatmap, no overlap or clipping | `0be0df5`, `app/src/test/java/io/github/fplayer/android/PlaybackSurfaceHandoffTest.kt` | Service Surface/script/thumbnail wiring is present; approved tablet/viewport fixture flow was not run this round, so the physical gate remains BLOCKED | Remove only synthetic screenshots and app-owned fixture cache |
-| `SCRIPT-LATENCY` | `BLOCKED` | Deterministic media clock and recording device sink | Multi-axis and single-axis synthetic scripts | Signed manual offset, response-based automatic estimate, per-axis output range, generation-safe scheduler stream | `docs/qa/t32-script-latency.md`, `d1b47ea` | Deterministic implementation and tests pass; protocol-specific response samples, physical transports and real media remain unverified | Stop scheduler and clear recorded frames |
+| `UI-FEED` | `BLOCKED` | Debug APK and synthetic indexed media | Current Feed, grid, overlay and four viewports | One active video Surface, vertical settled paging, progress or heatmap, no overlap or clipping | `0be0df5`, `app/src/test/java/io/github/fplayer/android/PlaybackSurfaceHandoffTest.kt`, `T32-INTEGRATION-20260820` | Service Surface/script/thumbnail wiring and the fresh debug build pass; ADB availability alone does not prove the approved tablet viewport/Surface flow, so the physical gate remains BLOCKED | Remove only synthetic screenshots and app-owned fixture cache |
+| `SCRIPT-LATENCY` | `BLOCKED` | Deterministic media clock and recording device sink | Multi-axis and single-axis synthetic scripts | Signed manual offset, response-based automatic estimate, per-axis output range, generation-safe scheduler stream | `docs/qa/t32-script-latency.md`, `d1b47ea`, `T32-INTEGRATION-20260820` | Deterministic implementation and fresh regression tests pass; protocol-specific response samples, physical transports and real media remain unverified | Stop scheduler and clear recorded frames |
 | `DEVICE-WS` | `BLOCKED` | Loopback green, unique runtime profile and physical safety gate | `TEST_OSR_WIFI` WebSocket endpoint | Connect, identify profile, bounded single-axis frame, disconnect and emergency stop without stale replay | `docs/qa/t31-report.md`, `docs/qa/t32-device-media-acceptance.md` | Loopback passed; physical endpoint/profile has not been uniquely accepted | Stop output, disconnect transport, restore prior network, force-stop project package |
 | `DEVICE-BLE` | `BLOCKED` | Loopback green, unique advertised service and physical safety gate | `TEST_OSR_DEVICE` BLE profile | Permission, discovery, GATT write or response, disconnect and emergency stop pass | `docs/qa/t31-report.md`, `docs/qa/t32-device-media-acceptance.md` | No unique BLE candidate/profile has been accepted | Stop output, close GATT, revoke temporary permission, force-stop project package |
 | `DEVICE-SPP` | `BLOCKED` | Loopback green, paired unique RFCOMM target and physical safety gate | `TEST_OSR_DEVICE` SPP profile | Connect after discovery cancellation, bounded frame, disconnect and emergency stop pass | `docs/qa/t31-report.md`, `docs/qa/t32-device-media-acceptance.md` | No unique paired SPP target/profile has been accepted | Stop output, close socket, revoke temporary permission, force-stop project package |
@@ -24,13 +24,13 @@ This matrix is the sole current T32 gate index. A gate changes state only when i
 | `RELEASE-TAG` | `BLOCKED` | Annotated release tag and clean checkout | Tag-rebuild source | The exact tagged source is available for audit and rebuild | `docs/qa/t32-release-compliance-report.md`, `docs/release/release-gates.md` | No annotated release tag exists | Do not create a tag during a blocked gate |
 | `RELEASE-DEVICE` | `BLOCKED` | Approved production device/profile and physical safety conditions | Release-device run | Device/profile acceptance and cleanup audit pass without unbounded motion | `docs/qa/t32-release-compliance-report.md`, `docs/security/test-device-policy.md` | Approved profile and physical release-device run are absent | No device session or motion output was initiated |
 
-## Baseline
+## Fresh Task 5 Consolidation
 
-- Fresh `testDebugUnitTest --rerun-tasks --max-workers=1 --no-configuration-cache`: 36 XML suites, 199 tests, 0 failures, 0 errors, 1 expected runtime-gated skip.
-- Fresh `:app:assembleDebug --no-configuration-cache`: pass.
-- Debug APK: 56,645,232 bytes; SHA-256 `8185B51C4182465670C9FE9CD0F6FB32E4E2139DFFF45871163EF118CDD035B8`.
-- Native lock: 20 sources and 14 build recipes; pass.
-- `git diff --check`: pass.
+- JDK 17 `testDebugUnitTest --rerun-tasks --max-workers=1 --no-configuration-cache`: 51 XML suites, 288 tests, 0 failures, 0 errors, 1 expected runtime-gated skip; 247 tasks executed.
+- `:app:assembleDebug --no-configuration-cache`: pass; APK 56,624,071 bytes, SHA-256 `82A2E9552BFF75C405CF83B5D27BB1C1F5C2C90A685503BE7FC290DC274D997C`.
+- `:app:assembleRelease --no-configuration-cache`: blocked at `validateReleaseConfiguration` because explicit production identity and signing inputs are absent; no release result is inferred from debug.
+- Native lock: 20 sources and 14 build recipes; pass. Release-compliance tests: 15 passed. Fail-closed hygiene scan and `git diff --check`: pass.
+- Exactly one online `TEST_TABLET` was visible through a read-only ADB preflight; this is environment availability only and changes no viewport, SAF, protocol-response or physical-device gate.
 
 ## Task Status Mapping
 
@@ -43,7 +43,7 @@ The master plan owns task definitions; this matrix owns gate states. The current
 | 2 | `COMPLETE` for deterministic timing, range and lifecycle behavior | `BLOCKED` for protocol-specific and real-resource evidence |
 | 3 | `PARTIAL`; loopback and authenticated SMB host pass | `BLOCKED` for SAF and physical transports |
 | 4 | `PARTIAL`; hygiene pass and fail-closed reports | `BLOCKED` for license, tag, reproducibility, signing and release device |
-| 5 | `PENDING` | `PENDING` |
+| 5 | `COMPLETE` for fresh regression, debug build, release fail-closed, lock and hygiene consolidation | `BLOCKED` where the matrix still requires external, physical or owner-provided evidence |
 | 6 | `BLOCKED` | `BLOCKED` |
 | 7 | `PARTIAL`; public handoff synchronization in progress | `PENDING` |
 
