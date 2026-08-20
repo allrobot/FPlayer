@@ -106,3 +106,9 @@
 1. 立即把完整状态、决定、验证和下一步压缩写入 `PROGRESS.md`；
 2. 重读确认保存成功；
 3. 告知用户上下文已较长，建议新会话从 `PROGRESS.md` 接续。
+
+
+## Skills
+- 若需浏览器自动化操作，通过命令行`playwright-cli --help`进行自动化操作
+- 若需搜索代码文档，通过命令行`ctx7 library`或`ctx7 docs`从源代码中提取最新的、特定版本的文档和代码示例
+- 若需window端UI自动化测试，通常使用python第三方库`pywinauto`；长期回归重型测试则使用FlaUI SDK，允许自行配置SDK等。

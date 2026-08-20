@@ -191,9 +191,9 @@
 
 ## 下一步
 
-1. 执行 UI/Feed、Funscript 延迟/限幅、设备媒体和发布合规四份 T32 子计划。
-2. 使用 `docs/qa/t32-acceptance-matrix.md` 逐项更新证据、清理和阻塞状态；完成每个功能变更后提交并推送到远端。
-3. 认证外部 SMB、唯一 `TEST_OSR_DEVICE` profile、机械安全现场和生产发布链继续保持 BLOCKED，直到前置条件真实满足。
+1. T32 UI/缩略图/索引脚本集成已提交 `0be0df5`；release hygiene/gate/report 已提交 `2cdcbcb`、`ad74db0`。
+2. 新鲜 Python hygiene 扫描 PASS；license、production identity/key、annotated tag、physical/device gates 仍按 gate JSON 为 BLOCKED，即使 ADB 当前可见设备也不改变未执行的物理验收状态。
+3. 继续更新 `docs/qa/t32-*.md`、SDD ledgers，运行 JDK 17 全量验证，逐项检查 diff 后提交并推送。
 
 ## 待用户确认
 

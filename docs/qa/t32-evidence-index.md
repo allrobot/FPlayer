@@ -1,6 +1,6 @@
 # T32 Evidence Index
 
-Date: 2026-08-19
+Date: 2026-08-20
 
 This index stores only repository-relative evidence, stable logical resource identifiers and non-sensitive aggregate results. It does not store external addresses, account names, credentials, physical port names, media names, locators or script content.
 
@@ -18,6 +18,8 @@ This index stores only repository-relative evidence, stable logical resource ide
 | `T32-PLAN-DEVICE` | `DEVICE-*`, `MEDIA-*`, `SMB-REAL` | Device and media plan | Loopback-first, SAF, authenticated SMB, physical safety and cleanup tasks | `docs/superpowers/plans/2026-08-19-t32-device-media-acceptance.md` |
 | `T32-PLAN-RELEASE` | `RELEASE-*` | Release compliance plan | License, attribution, privacy, reproducibility and signing tasks | `docs/superpowers/plans/2026-08-19-t32-release-compliance.md` |
 | `T32-SMB-REAL-20260820` | `SMB-REAL` | Runtime-gated SMB acceptance review | Pass for both authorized roots: root A `28/28/28` and root B `8/38/8` media/total-scripts/matched-scripts; genuine socket interruption, generation-3 recovery and credential cleanup passed. Tablet instrumentation remains blocked without `TEST_TABLET`. | `docs/qa/t32-device-media-acceptance.md` |
+| `T32-UI-INTEGRATION-20260820` | `UI-FEED` | JDK 17 focused app/core tests and debug assembly | Surface handoff, indexed-script matching, bounded locator reader, thumbnail owner/cache-root tests and debug assembly passed; approved tablet viewport flow was not run, so physical evidence remains BLOCKED | `0be0df5`, `app/src/test/java/io/github/fplayer/android/IndexedScriptResolverTest.kt`, `app/src/test/java/io/github/fplayer/android/PlaybackSurfaceHandoffTest.kt` |
+| `T32-RELEASE-HYGIENE-20260820` | `RELEASE-HYGIENE` | Python unittest and hygiene CLI | 15 release-compliance tests passed; fresh scan returned PASS without printing matched text or paths | `2cdcbcb`, `ad74db0`, `native-build/scan-release-hygiene.py` |
 
 ## Count Authority
 

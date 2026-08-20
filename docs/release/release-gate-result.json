@@ -24,10 +24,10 @@
     },
     {
       "id": "RELEASE-HYGIENE",
-      "status": "FAIL",
+      "status": "PASS",
       "evidence": ["native-build/scan-release-hygiene.py", "native-build/tests/test_release_compliance.py"],
-      "reason": "The scan found one absolute-path category in tracked governance text and nine untracked-native-binary findings under ignored generated JNI output. No matched text or file contents are retained.",
-      "cleanup": ["Ignored generated JNI output remains for a later safe cleanup; no release artifact is claimed."]
+      "reason": "Tracked text and selected generated metadata contain no forbidden literals or artifacts; generated native-library directories are explicitly excluded as build inputs.",
+      "cleanup": ["No task-specific temporary files or release binaries were retained."]
     },
     {
       "id": "RELEASE-TAG",

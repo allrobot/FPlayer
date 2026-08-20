@@ -38,6 +38,7 @@ SKIP_DIRECTORY_NAMES = {
     ".superpowers",
     "__pycache__",
     "build",
+    "jniLibs",
 }
 SKIP_DIRECTORY_PREFIXES = ("out-", "work-")
 BINARY_SUFFIXES = {

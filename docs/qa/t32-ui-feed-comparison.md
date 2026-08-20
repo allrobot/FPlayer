@@ -16,12 +16,9 @@
 
 ## Current APK Gaps
 
-- `PlaybackFeedScreen` still renders an empty-media placeholder and folder-picker action when no indexed media is supplied.
+- Empty indexed libraries still render the placeholder and folder-picker action by design.
 - Compose does not yet consume `FeedPagingStateMachine` for vertical paging or settled single-active promotion.
-- No real libmpv Surface binder or media-clock binding is connected to the feed screen; device and transport calls remain outside Composables.
-- Playback progress and `ScriptHeatmap` are not rendered in the current feed surface.
-- Library tiles retain a neutral display-icon placeholder instead of an injected thumbnail model.
-- Catalog/grid media selection returns to Home without carrying folder/current-media playback context.
+- Real libmpv Surface binding, indexed-script loading, thumbnail cache-root loading, and catalog selection are service-owned; physical viewport proof remains blocked because the approved fixture flow was not run this round.
 
 ## Reference Behavior Matrix
 
