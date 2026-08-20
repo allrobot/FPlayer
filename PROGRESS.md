@@ -192,8 +192,15 @@
 ## 下一步
 
 1. Task 6 先收集不可替代的最终应用/组织/包名、生产签名、release tag、唯一设备 profile 与机械安全现场决定；任一缺失继续 `BLOCKED`，不得以 debug 构建替代。
-2. 若上述决定仍未提供，Task 7 复读主计划、矩阵、证据索引与本文件，完成最终 T32 handoff；领域 QA/release 文件只提供细节证据。
+2. 外部 gate 仍按矩阵保持 `BLOCKED`：viewport、SAF、协议响应、物理 transport、完整 license/repro/tag/sign/device 输入均未获得新的直接证据。
 3. 新会话入口：先读 `AGENTS.md`、本文件、主计划、矩阵和证据索引，再只读取当前 Task 要求的一份 detail report 或规范；ADB 可见不改变未执行的 viewport、SAF、协议响应或物理设备验收状态。
+
+## T32 Task 7 Handoff（2026-08-20）
+
+- canonical 入口：`AGENTS.md` → `PROGRESS.md` → `docs/superpowers/plans/2026-08-19-t32-master-acceptance.md` → `docs/qa/t32-acceptance-matrix.md` → `docs/qa/t32-evidence-index.md`；detail report 仅作证据，不覆盖矩阵状态。
+- 当前结果：Task 5 与 Task 7 文档同步完成；`T32-INTEGRATION-20260820` 与 `T32-HANDOFF-20260820` 为最新聚合证据。`SMB-REAL`、`RELEASE-HYGIENE` 保持 `PASS`，其余未满足真实资源或发布前置的 gate 保持 `BLOCKED`。
+- 最后成功验证：JDK 17 全工程 51 suites/288 tests（0 failure、0 error、1 expected skip）、debug assemble、native lock、15 项 release-compliance tests、hygiene scan、`git diff --check`；release 因生产身份/签名缺失 fail-closed。
+- 安全退出：未访问新凭据、SAF、真实媒体或物理设备；未发送运动帧、未创建 release tag、未改变 gate 状态；工作区中用户的 `AGENTS.md` 修改及未跟踪 Task 5 工件保留，未纳入本 Task 提交。
 
 ## 待用户确认
 - 首次发布前确认最终应用名称、组织/作者标识、正式包名和生产签名来源；当前值只用于开发隔离。

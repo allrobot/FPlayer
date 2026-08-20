@@ -45,7 +45,7 @@ The master plan owns task definitions; this matrix owns gate states. The current
 | 4 | `PARTIAL`; hygiene pass and fail-closed reports | `BLOCKED` for license, tag, reproducibility, signing and release device |
 | 5 | `COMPLETE` for fresh regression, debug build, release fail-closed, lock and hygiene consolidation | `BLOCKED` where the matrix still requires external, physical or owner-provided evidence |
 | 6 | `BLOCKED` | `BLOCKED` |
-| 7 | `PARTIAL`; public handoff synchronization in progress | `PENDING` |
+| 7 | `COMPLETE`; canonical plan, matrix, evidence index and progress entry synchronized | `PENDING` for still-blocked external and release gates |
 
 ## Physical Motion Gate
 

@@ -23,9 +23,9 @@ The checkboxes below describe the acceptance actions and rerun procedure. They a
 | 2 | `COMPLETE` for deterministic estimator, scheduler, range, settings and lifecycle tests | `BLOCKED`: protocol-specific response samples, physical transports and real media remain unverified | `d1b47ea`, `docs/qa/t32-script-latency.md` |
 | 3 | `PARTIAL`: loopback and authenticated SMB host acceptance passed | `BLOCKED`: tablet SAF and physical WS/BLE/SPP/USB gates remain open | `docs/qa/t32-device-media-acceptance.md` |
 | 4 | `PARTIAL`: hygiene tooling and reports passed; release inputs are fail-closed | `BLOCKED`: complete license closure, tag, reproducibility, production identity/signing and release device are absent | `docs/qa/t32-release-compliance-report.md`, `docs/release/release-gate-result.json` |
-| 5 | `PENDING`: no fresh single cross-system consolidation record exists | `PENDING` | `docs/qa/t32-acceptance-matrix.md`, `docs/qa/t32-evidence-index.md` |
+| 5 | `COMPLETE`: fresh cross-system regression, debug build, release fail-closed, lock and hygiene results are consolidated | `BLOCKED` where the matrix still requires external, physical or owner-provided evidence | `T32-INTEGRATION-20260820`, `docs/qa/t32-acceptance-matrix.md`, `docs/qa/t32-evidence-index.md` |
 | 6 | `BLOCKED`: required user and release decisions are missing | `BLOCKED` | `docs/release/`, `docs/security/test-device-policy.md` |
-| 7 | `PARTIAL`: historical checkpoints exist; public plan/status synchronization is now being completed | `PENDING` handoff | `PROGRESS.md`, `docs/qa/t32-evidence-index.md` |
+| 7 | `COMPLETE`: canonical plan, matrix, evidence index and progress entry are synchronized for handoff | `PENDING` for the still-blocked external and release gates | `T32-HANDOFF-20260820`, `PROGRESS.md`, `docs/qa/t32-acceptance-matrix.md`, `docs/qa/t32-evidence-index.md` |
 
 `FAIL` is reserved for a demonstrated product or test defect. Missing devices, credentials, profiles, release identity, tags or signing material are `BLOCKED`; an unattempted check is `NOT_RUN`.
 
@@ -271,11 +271,11 @@ The four former subplans were execution material, not independent authority. The
 
 ### Task 7: 交付与后续会话 handoff
 
-- [ ] **Step 1: 复读所有计划与状态文件**
+- [x] **Step 1: 复读所有计划与状态文件**
 
   检查主计划、验收矩阵、证据索引、detail reports 之间的链接、命令、接口名称和矩阵 ID 一致；运行占位符扫描，确认没有未解决的占位符或敏感外部值。
 
-- [ ] **Step 2: 写下一会话入口**
+- [x] **Step 2: 写下一会话入口**
 
   在 `PROGRESS.md` 最后记录当前 gate、最后成功命令、未完成 Task 和安全退出状态；若上下文或证据过长，建议从该文件开启新会话。
 
